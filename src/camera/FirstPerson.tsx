@@ -112,7 +112,7 @@ function attachToAircraft(cam: PerspectiveCamera) {
 const q = new Quaternion();
 
 function resolveCollisions(p: Vector3, b: WalkBounds) {
-  const r = 0.28;
+  const r = 0.22;
   p.x = MathUtils.clamp(p.x, b.xMin, b.xMax);
   const hw = Math.max(0.1, b.halfWidth(p.x) - r);
   p.z = MathUtils.clamp(p.z, -hw, hw);

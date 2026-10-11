@@ -51,7 +51,7 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
 - **Floating origin in flight.** The aircraft stays near the render origin and the world
   moves around it, which keeps rendering precise at any distance from the airport.
 - **Progressive, lazy loading.**
-  1. Low-detail exterior LOD (about 1.3 MB).
+  1. Low-detail exterior LOD (about 1.05 MB, 375 kB gzipped).
   2. High-detail exterior LOD.
   3. Structure, cabin and cockpit GLBs, fetched only when X-ray, the cabin or the cockpit is
      opened.

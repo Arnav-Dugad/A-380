@@ -41,13 +41,14 @@ export const CLASS_NAMES: Record<CabinClass, string> = {
 };
 
 const EYE = 1.62;
+const AISLE = { main: 1.26, upper: 1.1 } as const;
 
 function deckBounds(deck: Deck, seats: Seat[]): WalkBounds {
   const d = CABIN_DECKS[deck];
   const obstacles: Obstacle[] = [];
   // seats (footprint by class)
   const len: Record<CabinClass, number> = { economy: 0.62, premium: 0.8, business: 1.45, first: 1.7 };
-  const wid: Record<CabinClass, number> = { economy: 0.5, premium: 0.56, business: 0.66, first: 0.78 };
+  const wid: Record<CabinClass, number> = { economy: 0.5, premium: 0.56, business: 0.5, first: 0.78 };
   for (const s of seats) {
     if (s.deck !== deck) continue;
     const x = sx(s.s);
@@ -94,7 +95,8 @@ function deckBounds(deck: Deck, seats: Seat[]): WalkBounds {
 }
 
 export function deckStartPose(deck: Deck): FpPose {
-  return deck === 'main' ? { pos: [sx(31.9), MAIN_DECK_FLOOR + EYE, 0], yaw: Math.PI, pitch: 0.02, fov: 68 } : { pos: [sx(16.3), UPPER_DECK_FLOOR + EYE, 0], yaw: Math.PI, pitch: 0.02, fov: 68 };
+  // Start in the right-hand aisle at the mid-cabin door, looking aft along the cabin.
+  return deck === 'main' ? { pos: [sx(31.9), MAIN_DECK_FLOOR + EYE, AISLE.main], yaw: Math.PI, pitch: 0.02, fov: 68 } : { pos: [sx(16.3), UPPER_DECK_FLOOR + EYE, AISLE.upper], yaw: Math.PI, pitch: 0.02, fov: 68 };
 }
 
 export const cabinActions = {
@@ -127,7 +129,7 @@ export const cabinActions = {
     const seat = st.seat;
     const deck = seat?.deck ?? st.deck;
     useCabin.setState({ seated: false });
-    const aisle = seat ? (Math.abs(seat.z) < 0.7 ? 0 : seat.z > 0 ? 0.92 : -0.92) : 0;
+    const aisle = (seat && seat.z < 0 ? -1 : 1) * AISLE[deck];
     const floor = deck === 'main' ? MAIN_DECK_FLOOR : UPPER_DECK_FLOOR;
     firstPerson.goTo({ pos: [seat ? sx(seat.s) : sx(30), floor + EYE, aisle], yaw: Math.PI, pitch: 0.02, fov: 68 });
     window.setTimeout(() => firstPerson.setBounds(deckBounds(deck, st.seats)), 1400);
@@ -211,7 +213,12 @@ export function CabinScene() {
     const deck = useCabin.getState().deck;
     firstPerson.enter('cabin', deckStartPose(deck), null);
     const t = window.setTimeout(() => firstPerson.setBounds(deckBounds(deck, useCabin.getState().seats)), 1400);
-    if (systems.state.cabinLight === 'off' && systems.state.elec.ac) systems.setCabinLight('boarding');
+    // A walk-through needs cabin lighting: connect ground power if the aircraft is cold and dark.
+    if (!systems.state.elec.ac && !systems.state.air.airborne) {
+      systems.setBattery(true);
+      systems.setExternalPower(true);
+    }
+    if (systems.state.cabinLight === 'off') systems.setCabinLight('boarding');
     return () => {
       window.clearTimeout(t);
       firstPerson.exit();

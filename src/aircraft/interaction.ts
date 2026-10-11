@@ -4,7 +4,7 @@
  */
 import type { ThreeEvent } from '@react-three/fiber';
 import { Mesh } from 'three';
-import { focusObjects } from '../camera/controls';
+import { focusObjects, getControls, onControls } from '../camera/controls';
 import { useUI } from '../state/ui';
 import { applyMaterialModes } from './materialDirector';
 import { getRig, onRig } from './rig';
@@ -92,3 +92,20 @@ export function selectPart(partId: string, focus = true): void {
 export function clearSelection(): void {
   useUI.getState().select(null);
 }
+
+// Camera collision avoidance: the orbit camera may not pass through the outer skin
+// (disabled in X-ray / section views, where looking inside is the point).
+const COLLIDER_PARTS = new Set(['fuselage', 'bellyFairing', 'wing', 'htp', 'vtp', 'fanCowl', 'engineInlet']);
+function updateColliders() {
+  const c = getControls();
+  const rig = getRig();
+  if (!c || !rig) return;
+  const ui = useUI.getState();
+  const off = ui.xray.enabled || ui.xray.clip > 0 || ui.xray.clipVertical > 0 || ui.explode > 0.01;
+  c.colliderMeshes = off ? [] : rig.meshes.filter((m) => COLLIDER_PARTS.has(m.userData.partId as string));
+}
+onRig(updateColliders);
+onControls(updateColliders);
+useUI.subscribe((s, p) => {
+  if (s.xray !== p.xray || (s.explode > 0.01) !== (p.explode > 0.01)) updateColliders();
+});

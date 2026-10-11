@@ -43,11 +43,11 @@ interface Zone {
   alternate?: boolean;
 }
 
-const Y_MAIN = [-2.75, -2.29, -1.83, -0.92, -0.46, 0.0, 0.46, 1.83, 2.29, 2.75]; // 3-4-3 (with centre 4 shifted)
-const yMain = Y_MAIN.map((z, i) => ({ z: i >= 3 && i <= 6 ? z - 0.23 + 0.46 * 0 : z, l: 'ABCDEFGHJK'[i]! }));
+const Y_MAIN = [-2.75, -2.29, -1.83, -0.69, -0.23, 0.23, 0.69, 1.83, 2.29, 2.75]; // 3-4-3, aisles at z ≈ ±1.26
+const yMain = Y_MAIN.map((z, i) => ({ z, l: 'ABCDEFGHJK'[i]! }));
 const Y_UP = [-2.25, -1.79, -0.69, -0.23, 0.23, 0.69, 1.79, 2.25].map((z, i) => ({ z, l: 'ABDEFGJK'[i]! }));
 const W_UP = [-2.15, -1.61, -0.54, 0, 0.54, 1.61, 2.15].map((z, i) => ({ z, l: 'ABDEFJK'[i]! }));
-const J_UP = [-2.1, -1.45, -0.55, 0, 0.55, 1.45, 2.1].map((z, i) => ({ z, l: 'ABDEFJK'[i]! }));
+const J_UP = [-2.2, -1.6, -0.62, 0, 0.62, 1.6, 2.2].map((z, i) => ({ z, l: 'ABDEFJK'[i]! }));
 const J_MAIN = [-2.55, -1.85, -0.9, -0.3, 0.3, 0.9, 1.85, 2.55].map((z, i) => ({ z, l: 'ABDEFGJK'[i]! }));
 const F_MAIN = [-2.35, -0.55, 0.55, 2.35].map((z, i) => ({ z, l: 'AEFK'[i]! }));
 
@@ -154,7 +154,7 @@ const TEMPLATES: Record<CabinClass, SeatTemplate> = {
   },
   business: {
     fabricMat: 'seatFabricBiz',
-    shellMat: 'plastic',
+    shellMat: 'cockpitPanel',
     fabric: () =>
       merge([
         box([0, 0.52, 0], [1.2, 0.12, 0.58]), // seat / flat-bed surface
