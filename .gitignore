@@ -1,0 +1,8 @@
+node_modules
+dist
+public/models/generated
+test-results
+playwright-report
+.wrangler
+*.log
+.DS_Store
