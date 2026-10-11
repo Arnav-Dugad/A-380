@@ -1,6 +1,6 @@
 /** Asset URLs and manifest access for the generated, independently streamed GLB files. */
 export type AircraftAsset = 'airframe' | 'wings' | 'empennage' | 'engines' | 'gear';
-export type InteriorAsset = 'cabin' | 'cockpit';
+export type InteriorAsset = 'cabin' | 'cockpit' | 'structure';
 export type Lod = 'hi' | 'lo';
 
 export const EXTERIOR_ASSETS: AircraftAsset[] = ['airframe', 'wings', 'empennage', 'engines', 'gear'];

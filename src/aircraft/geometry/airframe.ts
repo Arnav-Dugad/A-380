@@ -72,8 +72,8 @@ export function buildWindows(): { glass: BufferGeometry; frames: BufferGeometry 
   for (const side of [1, -1] as const) {
     for (const deck of decks) {
       for (const s of deck.list) {
-        glass.push(conformalShape(side, s, deck.y, glassOutline, 0.006, 1));
-        frames.push(conformalShape(side, s, deck.y, frameOutline, 0.003, 1));
+        glass.push(conformalShape(side, s, deck.y, glassOutline, 0.014, 1));
+        frames.push(conformalShape(side, s, deck.y, frameOutline, 0.007, 1));
       }
     }
   }
@@ -117,8 +117,8 @@ export function buildCockpitGlazing(): { glass: BufferGeometry; frames: BufferGe
   const frames: BufferGeometry[] = [];
   for (const pane of COCKPIT_PANES) {
     for (const p of [pane, mirrorTheta(pane)]) {
-      glass.push(patchSTheta(p, 0.012, 8, 8));
-      frames.push(patchSTheta(grow(p, 0.06, deg(1.6)), 0.006, 8, 8));
+      glass.push(patchSTheta(p, 0.02, 8, 8));
+      frames.push(patchSTheta(grow(p, 0.06, deg(1.6)), 0.009, 8, 8));
     }
   }
   return { glass: merge(glass), frames: merge(frames) };
@@ -128,14 +128,14 @@ function doorNode(d: DoorInfo): Group {
   const n = Math.round(((d.w + d.h) * 2) / 0.06);
   const outline = resample(roundedRect(d.w, d.h, d.deck === 'cargo' ? 0.12 : 0.2, 5), n);
   const seal = resample(roundedRect(d.w + 0.06, d.h + 0.06, d.deck === 'cargo' ? 0.14 : 0.23, 5), n);
-  const panel = conformalShape(d.side, d.s, d.y, outline, 0.012, 8);
-  const sealGeo = conformalShape(d.side, d.s, d.y, seal, 0.005, 8);
+  const panel = conformalShape(d.side, d.s, d.y, outline, 0.022, 8);
+  const sealGeo = conformalShape(d.side, d.s, d.y, seal, 0.008, 8);
   const centre = surfaceAt(d.side, d.s, d.y, 0);
   const partId = d.deck === 'cargo' ? 'cargoDoor' : 'passengerDoor';
   const g = group(`door_${d.id}`, [mesh(`door_${d.id}_opening`, sealGeo, 'seal', partId)], partId);
   if (d.deck === 'cargo') {
     // Upward-opening, hinged along the top edge.
-    const hingePt = surfaceAt(d.side, d.s, d.y + d.h / 2, 0.012);
+    const hingePt = surfaceAt(d.side, d.s, d.y + d.h / 2, 0.022);
     g.add(pivoted(`door_${d.id}_panel`, hingePt, [mesh(`door_${d.id}_skin`, panel, 'paint', partId)], { kind: 'hinge', axis: [-d.side, 0, 0], min: 0, max: 95 }, partId));
   } else {
     // Plug door: lifts, moves outboard, then translates forward parallel to the fuselage.

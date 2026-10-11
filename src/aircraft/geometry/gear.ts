@@ -208,7 +208,7 @@ function mainGear(kind: 'wing' | 'body', side: 1 | -1, quality: number): Group {
   const axles = kind === 'wing' ? [-cfg.axleSpan / 2, cfg.axleSpan / 2] : [-cfg.axleSpan, 0, cfg.axleSpan];
   const bogieY = MAIN_TYRE_R + 0.06;
   const bogieC: Vec3 = [sx(cfg.s), bogieY, z];
-  const pivotY = 4.25;
+  const pivotY = kind === 'wing' ? 4.95 : 4.25;
   const pivot: Vec3 = kind === 'wing' ? [bogieC[0], pivotY, z] : [bogieC[0] + 0.0, pivotY, z];
   const st = strutParts([pivot[0], pivotY, z], [bogieC[0], bogieY + 0.05, z], 0.2);
 
@@ -238,7 +238,7 @@ function mainGear(kind: 'wing' | 'body', side: 1 | -1, quality: number): Group {
       bogieParts.push(pivoted(`${id}_steer_axle`, [ax, MAIN_TYRE_R, z], [axleMesh, brakes, ...wheelsOnAxle], { kind: 'hinge', axis: [0, 1, 0], min: -15, max: 15 }, `${kind}Gear`));
     } else bogieParts.push(axleMesh, brakes, ...wheelsOnAxle);
   });
-  const bogie = pivoted(`${id}_bogie`, bogieC, bogieParts, { kind: 'hinge', axis: [0, 0, side], min: -95, max: 95 }, `${kind}Gear`);
+  const bogie = pivoted(`${id}_bogie`, bogieC, bogieParts, { kind: 'hinge', axis: [0, 0, 1], min: -95, max: 95 }, `${kind}Gear`);
 
   const braceTop: Vec3 = kind === 'wing' ? [pivot[0] + 0.2, pivotY - 0.2, z - side * 1.7] : [pivot[0] + 1.6, pivotY - 0.3, z];
   const braceBot: Vec3 = [pivot[0], 2.3, z];

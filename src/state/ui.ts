@@ -21,6 +21,8 @@ export interface XRay {
 export interface UIState {
   section: Section;
   selected: string | null;
+  /** scene-graph node name of the selected instance (e.g. slat_R3) */
+  selectedNode: string | null;
   hovered: string | null;
   env: EnvPreset;
   quality: Quality;
@@ -40,7 +42,7 @@ export interface UIState {
   audio: boolean;
   set: (patch: Partial<UIState>) => void;
   setXRay: (patch: Partial<XRay>) => void;
-  select: (id: string | null) => void;
+  select: (id: string | null, node?: string | null) => void;
 }
 
 const safeStorage = createJSONStorage(() => {
@@ -64,6 +66,7 @@ export const useUI = create<UIState>()(
     (set) => ({
       section: 'explore',
       selected: null,
+      selectedNode: null,
       hovered: null,
       env: 'studio',
       quality: 'high',
@@ -83,7 +86,7 @@ export const useUI = create<UIState>()(
       audio: false,
       set: (patch) => set(patch),
       setXRay: (patch) => set((s) => ({ xray: { ...s.xray, ...patch } })),
-      select: (id) => set({ selected: id }),
+      select: (id, node = null) => set({ selected: id, selectedNode: id ? node : null }),
     }),
     {
       name: 'a380-prefs-v1',

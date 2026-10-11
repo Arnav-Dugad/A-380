@@ -1,28 +1,16 @@
-import { useGLTF } from '@react-three/drei';
+import { Bvh, useGLTF } from '@react-three/drei';
 import { Suspense, useEffect, useMemo } from 'react';
-import { Mesh, type Group, type Material } from 'three';
+import type { Group } from 'three';
 import { EXTERIOR_ASSETS, assetUrl, type Lod } from './assets';
-import { getMaterials } from './materials';
+import { prepareScene } from './prepare';
+import { onClick, onPointerMove, onPointerOut } from './interaction';
 import { AircraftRig, setRig } from './rig';
-
-/** Swap placeholder materials for the shared PBR library and configure shadows. */
-function prepare(root: Group): void {
-  const lib = getMaterials();
-  root.traverse((o) => {
-    if (!(o instanceof Mesh)) return;
-    const key = (o.material as Material).name;
-    const replacement = o.name === 'fuselage_skin' ? lib.livery : (lib as Record<string, Material>)[key];
-    if (replacement) o.material = replacement;
-    o.castShadow = !['cabin_windows', 'cabin_window_frames', 'cockpit_windows', 'cockpit_window_frames'].includes(o.name);
-    o.receiveShadow = true;
-  });
-}
 
 function AircraftLod({ lod }: { lod: Lod }) {
   const gltfs = useGLTF(EXTERIOR_ASSETS.map((a) => assetUrl(a, lod)), false, true);
   const roots = useMemo(() => {
     const list = gltfs.map((g) => g.scene as Group);
-    list.forEach(prepare);
+    list.forEach((r) => prepareScene(r));
     return list;
   }, [gltfs]);
   useEffect(() => {
@@ -31,7 +19,7 @@ function AircraftLod({ lod }: { lod: Lod }) {
     return () => setRig(null);
   }, [roots]);
   return (
-    <group name="aircraft">
+    <group name="aircraft" onPointerMove={onPointerMove} onPointerOut={onPointerOut} onClick={onClick}>
       {roots.map((r) => (
         <primitive key={r.uuid} object={r} />
       ))}
@@ -46,6 +34,7 @@ function AircraftLod({ lod }: { lod: Lod }) {
 export function AircraftModel({ highDetail }: { highDetail: boolean }) {
   return (
     <Suspense fallback={null}>
+      <Bvh firstHitOnly>
       {highDetail ? (
         <Suspense fallback={<AircraftLod lod="lo" />}>
           <AircraftLod lod="hi" />
@@ -53,6 +42,7 @@ export function AircraftModel({ highDetail }: { highDetail: boolean }) {
       ) : (
         <AircraftLod lod="lo" />
       )}
+      </Bvh>
     </Suspense>
   );
 }

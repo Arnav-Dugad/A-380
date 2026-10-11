@@ -26,6 +26,17 @@ export class AircraftRig {
 
   constructor(readonly roots: Object3D[]) {
     for (const r of roots) this.index(r);
+    for (const r of extraRoots) this.index(r);
+  }
+
+  /** Rebuild all indices (after attaching / detaching an extra root). */
+  reindex(): void {
+    this.nodes.clear();
+    this.articulated.clear();
+    this.partMeshes.clear();
+    this.meshes.length = 0;
+    for (const r of this.roots) this.index(r);
+    for (const r of extraRoots) this.index(r);
   }
 
   private index(root: Object3D) {
@@ -95,6 +106,7 @@ export class AircraftRig {
     if (!a) return;
     tmpQ.setFromAxisAngle(a.axis, angle);
     a.node.quaternion.copy(a.baseQuat).premultiply(tmpQ);
+    a.node.position.copy(a.basePos);
   }
 
   /** Reset every articulated node to its rest pose. */
@@ -113,6 +125,19 @@ function partIdOf(o: Object3D): string | undefined {
     p = p.parent;
   }
   return undefined;
+}
+
+// --- extra scene roots (structure, cabin, cockpit) indexed by every rig
+const extraRoots = new Set<Object3D>();
+export function attachRoot(root: Object3D): void {
+  extraRoots.add(root);
+  current?.reindex();
+  for (const l of listeners) l(current);
+}
+export function detachRoot(root: Object3D): void {
+  extraRoots.delete(root);
+  current?.reindex();
+  for (const l of listeners) l(current);
 }
 
 // --- global registry so non-React systems (controllers, camera, selection) can reach the rig

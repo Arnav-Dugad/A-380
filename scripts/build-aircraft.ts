@@ -16,6 +16,7 @@ import { Mesh, type BufferGeometry, type Object3D } from 'three';
 import { ASSETS, buildAsset, type AssetName } from '../src/aircraft/geometry/aircraft';
 import { buildCabin } from '../src/aircraft/geometry/cabin';
 import { buildCockpit } from '../src/aircraft/geometry/cockpit';
+import { buildStructure } from '../src/aircraft/geometry/structure';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'models', 'generated');
@@ -39,6 +40,8 @@ const PREVIEW: Record<string, [number, number, number, number, number]> = {
   fan: [0.55, 0.57, 0.6, 1.0, 0.3],
   inlet: [0.08, 0.08, 0.09, 0.3, 0.6],
   exhaust: [0.35, 0.3, 0.27, 1.0, 0.55],
+  structure: [0.5, 0.55, 0.6, 0.6, 0.5],
+  cargo: [0.55, 0.57, 0.6, 0.5, 0.6],
 };
 
 function exportGroup(group: Object3D, file: string): { tris: number; meshes: number } {
@@ -123,6 +126,7 @@ async function main() {
     jobs.push({ name, lod: 'hi', build: () => buildAsset(name as AssetName, 1) });
     jobs.push({ name, lod: 'lo', build: () => buildAsset(name as AssetName, 0.5) });
   }
+  jobs.push({ name: 'structure', lod: 'hi', build: () => buildStructure() });
   jobs.push({ name: 'cabin', lod: 'hi', build: () => buildCabin() });
   jobs.push({ name: 'cockpit', lod: 'hi', build: () => buildCockpit() });
 
