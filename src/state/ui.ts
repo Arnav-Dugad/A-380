@@ -6,6 +6,8 @@ export type EnvPreset = 'studio' | 'apron' | 'golden' | 'hangar' | 'night';
 export type Quality = 'ultra' | 'high' | 'balanced' | 'performance';
 export type Weather = 'clear' | 'overcast' | 'lightRain' | 'heavyRain' | 'fog' | 'windy';
 export type ExplodeGroup = 'all' | 'engines' | 'gear' | 'wings' | 'empennage' | 'fuselage';
+export type FlightCam = 'chase' | 'cockpit' | 'tower' | 'wing' | 'flyby';
+export type FlightScenario = 'coldDark' | 'taxi' | 'ready' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing' | 'free';
 export type SystemLayer = 'none' | 'flightControls' | 'landingGear' | 'propulsion' | 'doors' | 'structure' | 'cabin';
 
 export interface XRay {
@@ -40,6 +42,10 @@ export interface UIState {
   showHelp: boolean;
   showStats: boolean;
   audio: boolean;
+  flightCam: FlightCam;
+  flightScenario: FlightScenario;
+  flightPaused: boolean;
+  replay: boolean;
   set: (patch: Partial<UIState>) => void;
   setXRay: (patch: Partial<XRay>) => void;
   select: (id: string | null, node?: string | null) => void;
@@ -84,6 +90,10 @@ export const useUI = create<UIState>()(
       showHelp: false,
       showStats: false,
       audio: false,
+      flightCam: 'chase',
+      flightScenario: 'ready',
+      flightPaused: false,
+      replay: false,
       set: (patch) => set(patch),
       setXRay: (patch) => set((s) => ({ xray: { ...s.xray, ...patch } })),
       select: (id, node = null) => set({ selected: id, selectedNode: id ? node : null }),

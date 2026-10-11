@@ -6,7 +6,8 @@
  */
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
-import { MathUtils, PerspectiveCamera, Quaternion, Vector3, Euler } from 'three';
+import { Euler, MathUtils, Matrix4, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { worldFrame } from '../scene/worldFrame';
 import { getControls } from './controls';
 
 export interface FpPose {
@@ -62,6 +63,14 @@ export const firstPerson = {
   goTo(pose: FpPose) {
     const cam = getControls()?.camera as PerspectiveCamera | undefined;
     const from = cam ? { pos: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov } : { pos: new Vector3(...pose.pos), q: new Quaternion(), fov: 50 };
+    // express the starting pose in aircraft coordinates (the aircraft may be moving)
+    const a = worldFrame.aircraft;
+    if (a && cam) {
+      a.updateMatrixWorld();
+      const inv = new Matrix4().copy(a.matrixWorld).invert();
+      const m = new Matrix4().compose(from.pos, from.q, new Vector3(1, 1, 1)).premultiply(inv);
+      m.decompose(from.pos, from.q, new Vector3());
+    }
     state.target = { pos: new Vector3(...pose.pos), yaw: pose.yaw, pitch: pose.pitch, fov: pose.fov ?? state.fov, t: 0, from };
   },
   setBounds(b: WalkBounds | null) {
@@ -89,6 +98,17 @@ export const firstPerson = {
 };
 
 const euler = new Euler(0, 0, 0, 'YXZ');
+const IDENTITY = new Matrix4();
+const tmpM = new Matrix4();
+/** Transform a camera pose given in aircraft coordinates into render coordinates. */
+function attachToAircraft(cam: PerspectiveCamera) {
+  const a = worldFrame.aircraft;
+  if (!a) return;
+  a.updateMatrixWorld();
+  if (a.matrixWorld.equals(IDENTITY)) return;
+  tmpM.compose(cam.position, cam.quaternion, cam.scale).premultiply(a.matrixWorld);
+  tmpM.decompose(cam.position, cam.quaternion, cam.scale);
+}
 const q = new Quaternion();
 
 function resolveCollisions(p: Vector3, b: WalkBounds) {
@@ -185,6 +205,7 @@ export function FirstPersonRig() {
       camera.quaternion.slerpQuaternions(tg.from.q, q, k);
       camera.fov = MathUtils.lerp(tg.from.fov, tg.fov, k);
       camera.updateProjectionMatrix();
+      attachToAircraft(camera);
       if (tg.t >= 1) {
         state.pos.copy(tg.pos);
         state.yaw = tg.yaw;
@@ -212,6 +233,7 @@ export function FirstPersonRig() {
     euler.set(-state.pitch, -state.yaw - Math.PI / 2, 0);
     camera.quaternion.setFromEuler(euler);
     camera.position.copy(state.pos);
+    attachToAircraft(camera);
     if (Math.abs(camera.fov - state.fov) > 0.01) {
       camera.fov = state.fov;
       camera.updateProjectionMatrix();

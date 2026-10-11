@@ -255,14 +255,16 @@ function controlOf(o: Object3D | null): string | null {
 
 export function CockpitScene() {
   const section = useUI((s) => s.section);
+  const flightCam = useUI((s) => s.flightCam);
   const active = section === 'cockpit';
+  const visible = active || (section === 'flight' && flightCam === 'cockpit');
   const [root, setRoot] = useState<Group | null>(null);
   const [requested, setRequested] = useState(false);
   const drag = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (active) setRequested(true);
-  }, [active]);
+    if (visible) setRequested(true);
+  }, [visible]);
 
   useEffect(() => {
     if (!active) return;
@@ -277,14 +279,14 @@ export function CockpitScene() {
   const onReady = useCallback((r: Group) => setRoot(r), []);
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
-    if (!active) return;
+    if (!visible) return;
     e.stopPropagation();
     const id = controlOf(e.object);
     document.body.style.cursor = id ? 'pointer' : '';
     showTip(id ? CONTROL_LABELS[id] ?? id : null, e.nativeEvent.clientX, e.nativeEvent.clientY);
   };
   const onDown = (e: ThreeEvent<PointerEvent>) => {
-    if (!active) return;
+    if (!visible) return;
     const id = controlOf(e.object);
     if (id === 'SIDESTICK') {
       e.stopPropagation();
@@ -306,7 +308,7 @@ export function CockpitScene() {
     }
   };
   const onClick = (e: ThreeEvent<MouseEvent>) => {
-    if (!active || e.delta > 4) return;
+    if (!visible || e.delta > 4) return;
     const id = controlOf(e.object);
     if (!id || id === 'SIDESTICK') return;
     e.stopPropagation();
@@ -317,10 +319,10 @@ export function CockpitScene() {
   return (
     <group onPointerMove={onMove} onPointerOut={() => showTip(null)} onPointerDown={onDown} onClick={onClick}>
       <Suspense fallback={null}>
-        <LazyLayer name="cockpit" visible={active} onReady={onReady} />
+        <LazyLayer name="cockpit" visible={visible} onReady={onReady} />
       </Suspense>
       {root && <CockpitBinder root={root} />}
-      {active && <CockpitLighting />}
+      {visible && <CockpitLighting />}
     </group>
   );
 }

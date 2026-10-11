@@ -33,9 +33,7 @@ export function gridSurface(
   }
   const P = (i: number, j: number): Vec3 => {
     const ii = Math.min(rows - 1, Math.max(0, i));
-    let jj = j;
-    if (wrapV) jj = ((j % nv) + nv) % nv;
-    else jj = Math.min(cols - 1, Math.max(0, j));
+    const jj = wrapV ? ((j % nv) + nv) % nv : Math.min(cols - 1, Math.max(0, j));
     return pts[ii * cols + jj]!;
   };
   const pos = new Float32Array(rows * cols * 3);

@@ -36,7 +36,7 @@ export function applyState(rig: AircraftRig, dt: number): void {
     rig.hinge(`gdoor_body_${S}`, ease(g.doors) * 88);
     rig.hinge(`gdoor_nose_${S}`, ease(g.doors) * 85);
   }
-  rig.hinge('nose_steer', g.steering);
+  rig.hinge('nose_steer', -g.steering); // +steering = turn right; the hinge axis is +Y (nose-left positive)
 
   // Wheels roll with ground speed (only when on the ground)
   if (g.wow) wheelAngle -= (s.air.gs / 0.7) * dt;

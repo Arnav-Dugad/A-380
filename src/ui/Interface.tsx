@@ -15,6 +15,7 @@ import { FlightPanel } from './sections/Flight';
 import { SpecsPanel } from './sections/Specs';
 import { SystemsPanel } from './sections/Systems';
 import { useShortcuts } from './useShortcuts';
+import { FlightHUD } from '../flight/HUD';
 
 function SectionPanel() {
   const section = useUI((s) => s.section);
@@ -41,9 +42,11 @@ export function Interface() {
   useShortcuts(toggleHelp);
   const introDone = useUI((s) => s.introDone);
   const selected = useUI((s) => s.selected);
+  const section = useUI((s) => s.section);
   if (!introDone) return null;
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
+      {section === 'flight' && <FlightHUD />}
       <TopBar onSettings={() => setModal((m) => (m === 'settings' ? null : 'settings'))} onHelp={toggleHelp} />
 
       {/* Left: contextual section panel (desktop) / bottom sheet (mobile) */}
@@ -57,7 +60,7 @@ export function Interface() {
       </div>
 
       {/* Right: inspector */}
-      {selected && (
+      {selected && section !== 'flight' && section !== 'cockpit' && section !== 'cabin' && (
         <div className="pointer-events-none absolute right-3 top-[72px] z-10 flex max-w-[calc(100vw-24px)] justify-end sm:right-5 sm:top-[84px]">
           <Inspector />
         </div>
