@@ -5,7 +5,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
 
-export const perf = { fps: 0, frameMs: 0, calls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0, samples: [] as number[] };
+export const perf = { frames: 0, fps: 0, frameMs: 0, calls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0, samples: [] as number[] };
 
 export function PerfProbe() {
   const gl = useThree((s) => s.gl);
@@ -16,6 +16,7 @@ export function PerfProbe() {
     };
   }, [gl]);
   useFrame((_, dt) => {
+    perf.frames++;
     perf.samples.push(dt * 1000);
     if (perf.samples.length > 120) perf.samples.shift();
     const avg = perf.samples.reduce((a, b) => a + b, 0) / perf.samples.length;

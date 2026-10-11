@@ -28,9 +28,11 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   - cinematic tour.
 - ✅ Hover highlight, raycast selection (BVH-accelerated) and an inspector with sourced
   facts and live diagrams.
-- 🟡 Camera collision avoidance. The orbit is limited to above the ground plane and the
-  first-person camera collides with cabin geometry. There is no general obstacle
-  avoidance in orbit mode.
+- ✅ Camera collision avoidance:
+  - the orbit camera stays above the ground and cannot pass through the fuselage, wing,
+    tail or nacelle skins (switched off in X-ray, section and exploded views, where looking
+    inside is the point);
+  - the first-person camera collides with cabin geometry.
 
 ## Phase 3: mechanisms and animation
 
@@ -107,7 +109,8 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   scaling, and LOD.
 - ✅ Constant light count, shared materials and geometry, lazy layers, floating origin.
 - ✅ Performance overlay (FPS, draw calls, triangles, resources) and a measurement script.
-  Results are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+  Per-frame draw calls in the studio are 899 at High, 594 at Balanced and 294 at
+  Performance. Full results are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 - ✅ Photo mode: hides the UI, controls field of view and exposure, rule-of-thirds grid,
   1–3× PNG capture capped at 8,192 px.
 - ✅ Optional synthesised audio (off by default).
@@ -117,8 +120,8 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   - reduced-motion support;
   - keyboard-accessible equivalents of the 3D cockpit controls.
 - ✅ Unit tests (Vitest): systems, flight model, scenarios, geometry.
-- ✅ Browser tests (Playwright) of the real rendered app. Desktop and mobile results are in
-  [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+- ✅ Browser tests (Playwright) of the real rendered app: 15 of 15 pass, 14 desktop and 1
+  mobile. Details are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 - ✅ Cloudflare Pages configuration (`wrangler.toml`, `_headers`) and a GitHub Actions
   CI/deploy workflow.
 - ⏳ **Live Cloudflare deployment is blocked.** The build environment's network policy

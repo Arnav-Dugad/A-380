@@ -62,7 +62,8 @@ export function Viewport() {
       <FirstPersonRig />
       <FlightMode />
       <Jacks />
-      {env === 'studio' && section !== 'flight' && <ContactShadows position={[0, 0.02, 0]} scale={150} blur={2.6} far={14} opacity={0.7} resolution={1024} frames={quality === 'performance' ? 1 : Infinity} />}
+      {/* Shadow maps ground the aircraft on the other presets; a per-frame contact-shadow pass would re-render the whole scene again */}
+      {env === 'studio' && section !== 'flight' && quality === 'performance' && <ContactShadows position={[0, 0.02, 0]} scale={150} blur={2.6} far={14} opacity={0.7} resolution={1024} frames={1} />}
       <CameraControls ref={setControls} makeDefault minDistance={2} maxDistance={900} maxPolarAngle={Math.PI / 2 - 0.02} />
       <Cinematic />
       <PhotoBridge />

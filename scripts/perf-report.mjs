@@ -26,12 +26,16 @@ const tReady = Date.now() - t0;
 const stats = async (name, setup, wait = 6000) => {
   if (setup) await page.evaluate(setup);
   await page.waitForTimeout(wait);
+  // renderer.info is read one frame late: wait for a few complete frames in the new state
+  const f0 = await page.evaluate(() => window.__a380.perf.frames);
+  await page.waitForFunction((f) => window.__a380.perf.frames >= f + 3, f0, { timeout: 120000 });
   const p = await page.evaluate(() => ({ ...window.__a380.perf, samples: undefined }));
   return { view: name, calls: p.calls, triangles: p.triangles, geometries: p.geometries, textures: p.textures, programs: p.programs, swiftshaderFps: +p.fps.toFixed(1) };
 };
 const rows = [];
 rows.push(await stats('Explore · studio · high', `window.__a380.ui.getState().set({introDone:true, env:'studio', quality:'high'})`, 9000));
 rows.push(await stats('Explore · studio · performance', `window.__a380.ui.getState().set({quality:'performance'})`, 8000));
+rows.push(await stats('Explore · studio · balanced', `window.__a380.ui.getState().set({quality:'balanced'})`, 8000));
 rows.push(await stats('Explore · apron · high', `window.__a380.ui.getState().set({quality:'high', env:'apron'})`, 9000));
 rows.push(await stats('Anatomy · X-ray', `window.__a380.ui.getState().set({section:'anatomy', xray:{enabled:true,skinOpacity:0.18,structure:true,cabin:true,cargo:true,clip:0,clipVertical:0}})`, 12000));
 rows.push(await stats('Cockpit', `window.__a380.ui.getState().set({section:'cockpit', xray:{enabled:false,skinOpacity:0.18,structure:true,cabin:true,cargo:true,clip:0,clipVertical:0}})`, 12000));

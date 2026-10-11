@@ -268,6 +268,10 @@ export function CockpitScene() {
 
   useEffect(() => {
     if (!active) return;
+    // At the stand the ground power unit is connected, so the displays come alive; the battery
+    // and APU switches stay with the user.
+    if (!systems.state.elec.ac && !systems.state.air.airborne) systems.setExternalPower(true);
+    cockpitLights.dome = true;
     firstPerson.enter('cockpit', COCKPIT_VIEWS.captain!.pose);
     return () => {
       firstPerson.exit();
@@ -330,13 +334,13 @@ export function CockpitScene() {
 function CockpitLighting() {
   const flood = useRef<THREE_PointLight>(null);
   useFrame(() => {
-    if (flood.current) flood.current.intensity = cockpitLights.dome ? 2.2 : 0.5;
+    if (flood.current) flood.current.intensity = cockpitLights.dome ? 14 : 2.5;
   });
   return (
     <>
-      <pointLight ref={flood} position={[EYE_CAPTAIN[0] - 0.2, EYE_CAPTAIN[1] + 0.9, 0]} color="#ffe2b8" intensity={0.5} distance={4} decay={2} />
-      <pointLight position={[EYE_CAPTAIN[0] + 0.6, EYE_CAPTAIN[1] - 0.2, 0]} color="#bcd8ff" intensity={0.25} distance={2.5} decay={2} />
-      <hemisphereLight args={['#dfe9f5', '#2a2f36', 0.55]} />
+      <pointLight ref={flood} position={[EYE_CAPTAIN[0] - 0.2, EYE_CAPTAIN[1] + 0.9, 0]} color="#ffe2b8" intensity={2.5} distance={5} decay={2} />
+      <pointLight position={[EYE_CAPTAIN[0] + 0.6, EYE_CAPTAIN[1] - 0.2, 0]} color="#bcd8ff" intensity={2} distance={3} decay={2} />
+      <hemisphereLight args={['#dfe9f5', '#2a2f36', 0.8]} />
     </>
   );
 }
