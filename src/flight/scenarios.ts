@@ -57,11 +57,11 @@ export function applyScenario(id: FlightScenario): void {
     systems.state.gear.lever = opts.gear ? 'down' : 'up';
     systems.state.gear.position = opts.gear ? 0 : 1;
     systems.state.gear.wow = false;
-    const pitch = trimPitch(opts.kt, altM, opts.conf[1], mass, opts.gamma);
-    const lever = trimLever(opts.kt, altM, opts.conf[1], mass, opts.gamma, opts.gear);
-    enginesAt(lever);
-    // place() takes TAS; convert from IAS with the density ratio
+    // place() and the trim helpers take TAS; convert from IAS with the density ratio
     const tas = opts.kt / Math.sqrt(Math.max(0.2, isaRatio(altM)));
+    const pitch = trimPitch(tas, altM, opts.conf[1], mass, opts.gamma);
+    const lever = trimLever(tas, altM, opts.conf[1], mass, opts.gamma, opts.gear);
+    enginesAt(lever);
     flight.place({ x: opts.x, z: opts.z ?? 0, alt: altM + AC.cgHeight, heading: opts.heading ?? 90, speedKt: tas, pitch, gamma: opts.gamma, mass });
   };
   switch (id) {

@@ -162,7 +162,7 @@ function apuExhaust(): BufferGeometry {
     [0.05, 0.3],
   ];
   const g = orientOutward(lathe(prof, 32));
-  g.translate(tip[0] - 0.0, cy, 0);
+  g.translate(tip[0] + 0.5, cy, 0); // nozzle exit flush with the tail-cone tip
   return g;
 }
 

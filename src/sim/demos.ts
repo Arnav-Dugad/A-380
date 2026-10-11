@@ -15,6 +15,18 @@ export function cancelDemos(): void {
   while (timers.length) window.clearTimeout(timers.pop());
 }
 
+/** Run `fn` once `cond` holds (polled), so demos follow simulation state, not wall-clock time. */
+function when(cond: () => boolean, fn: () => void, timeoutMs = 120_000) {
+  const mine = token;
+  const t0 = performance.now();
+  const poll = () => {
+    if (mine !== token || performance.now() - t0 > timeoutMs) return;
+    if (cond()) fn();
+    else timers.push(window.setTimeout(poll, 150));
+  };
+  poll();
+}
+
 function ensureGroundPower() {
   const s = systems.state;
   if (!s.elec.battery) systems.setBattery(true);
@@ -51,8 +63,20 @@ export function runDemo(d: Demo): string {
       }
       ensureGroundPower();
       if (!s.maintenance) systems.setMaintenance(true);
-      later(1800, () => systems.setGearLever('up'));
-      later(1800 + 16000, () => systems.setGearLever('down'));
+      // Retract once the jacks have taken the weight and ground hydraulics are up, extend after a pause.
+      when(
+        () => !systems.state.gear.wow && systems.state.hyd.green > 2500,
+        () => {
+          systems.setGearLever('up');
+          when(
+            () => systems.state.gear.position > 0.999 && systems.state.gear.doors < 0.01,
+            () => {
+              const t = systems.state.time;
+              when(() => systems.state.time - t > 3, () => systems.setGearLever('down'));
+            },
+          );
+        },
+      );
       return 'Gear swing test: aircraft on jacks, gear retracts then extends';
     }
     case 'flaps': {
@@ -95,11 +119,23 @@ export function runDemo(d: Demo): string {
         if (systems.state.apu.state !== 'running') return later(500, waitApu);
         systems.setApuBleed(true);
         systems.setEngineMode('IGN/START');
-        [3, 2, 1, 0].forEach((i, k) => later(200 + k * 2500, () => systems.setEngineMaster(i, true)));
-        later(16000, () => {
-          systems.setEngineMode('NORM');
-          systems.setTimeScale(1);
-        });
+        // Start 4, 3, 2, 1 in sequence, each once the previous one has passed 25 % N2
+        const startNext = (k: number) => {
+          const order = [3, 2, 1, 0];
+          if (k >= order.length) {
+            when(() => systems.state.engines.every((e) => e.state === 'running'), () => {
+              systems.setEngineMode('NORM');
+              systems.setTimeScale(1);
+            });
+            return;
+          }
+          const i = order[k]!;
+          when(() => systems.state.bleedAvailable, () => {
+            systems.setEngineMaster(i, true);
+            when(() => systems.state.engines[i]!.n2 > 25, () => startNext(k + 1));
+          });
+        };
+        startNext(0);
       };
       later(600, waitApu);
       return 'Engine start: APU → bleed → engines 4, 3, 2, 1 (time ×4)';

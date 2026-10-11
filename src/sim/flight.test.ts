@@ -118,3 +118,19 @@ describe('flight model', () => {
     expect(go()).toEqual(go());
   });
 });
+
+describe('flight scenarios', () => {
+  it.each(['climb', 'cruise', 'descent', 'approach', 'landing', 'free'] as const)('%s starts trimmed and stays stable', async (id) => {
+    const { applyScenario } = await import('../flight/scenarios');
+    const { flight } = await import('./flight');
+    applyScenario(id);
+    let maxDev = 0;
+    for (let t = 0; t < 20; t += DT) {
+      flight.step(DT);
+      systems.step(DT);
+      maxDev = Math.max(maxDev, Math.abs(flight.state.nz - 1));
+    }
+    expect(flight.state.crashed).toBeNull();
+    expect(maxDev).toBeLessThan(0.35);
+  });
+});

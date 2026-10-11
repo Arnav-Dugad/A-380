@@ -34,7 +34,7 @@ export const COCKPIT_FLOOR = 6.35; // [A] flight deck sits between the decks
 /** Wing planform (starboard). z is spanwise from aircraft centreline. */
 export const WING = {
   rootZ: 2.6, // inside the belly fairing
-  tipZ: SPAN / 2,
+  tipZ: SPAN / 2 - 0.05, // fence thickness brings the overall span to 79.75 m
   kinkZ: 14.0, // [A] trailing-edge kink
   // [A] leading edge: station at root and tip
   leRoot: 27.2,
@@ -85,7 +85,7 @@ export const HTP = {
 /** Vertical tailplane */
 export const VTP = {
   rootY: 9.6,
-  tipY: HEIGHT - 0.12,
+  tipY: HEIGHT - 0.01,
   leRoot: 54.0,
   leTip: 66.4,
   chordRoot: 15.4,

@@ -96,62 +96,106 @@ export function seatMap(): SeatRecord[] {
 }
 
 // ------------------------------------------------------------- seat templates
-function economySeat(): BufferGeometry {
-  return merge([
-    box([0, 0.44, 0], [0.48, 0.1, 0.44]), // cushion
-    box([-0.25, 0.8, 0], [0.12, 0.72, 0.44], 0, -0.18), // backrest (reclined)
-    box([-0.33, 1.2, 0], [0.1, 0.16, 0.4], 0, -0.18), // headrest
-    box([0.02, 0.6, 0.235], [0.42, 0.05, 0.04]), // armrest
-    box([0.18, 0.2, 0.15], [0.05, 0.36, 0.05]),
-    box([0.18, 0.2, -0.15], [0.05, 0.36, 0.05]),
-    box([-0.18, 0.2, 0], [0.05, 0.36, 0.34]),
-    box([-0.33, 0.95, 0], [0.02, 0.24, 0.3], 0, -0.18), // seat-back screen surround
-  ]);
-}
-function premiumSeat(): BufferGeometry {
-  return merge([
-    box([0, 0.46, 0], [0.55, 0.12, 0.5]),
-    box([-0.28, 0.85, 0], [0.13, 0.8, 0.5], 0, -0.22),
-    box([-0.38, 1.28, 0], [0.12, 0.18, 0.44], 0, -0.22),
-    box([0.02, 0.62, 0.28], [0.5, 0.07, 0.07]),
-    box([0.02, 0.62, -0.28], [0.5, 0.07, 0.07]),
-    box([0.42, 0.25, 0], [0.18, 0.08, 0.44], 0, 0.5), // leg rest
-    box([0, 0.2, 0], [0.4, 0.36, 0.4]),
-  ]);
-}
-function businessSeat(): BufferGeometry {
-  return merge([
-    box([0, 0.5, 0], [1.25, 0.14, 0.6]), // seat / bed surface
-    box([-0.62, 0.95, 0], [0.12, 0.9, 0.62], 0, -0.12), // backrest
-    box([0, 0.25, 0], [1.2, 0.4, 0.5]),
-    box([0, 0.65, 0.36], [1.3, 0.62, 0.06]), // privacy shell side
-    box([0.7, 0.55, 0], [0.3, 0.55, 0.62]), // ottoman / footwell
-    box([0.86, 1.0, 0], [0.04, 0.3, 0.45]), // IFE screen
-  ]);
-}
-function firstSuite(): BufferGeometry {
-  return merge([
-    box([0, 0.5, 0], [0.95, 0.16, 0.7]),
-    box([-0.48, 1.0, 0], [0.14, 0.95, 0.72], 0, -0.1),
-    box([0, 0.25, 0], [0.9, 0.4, 0.6]),
-    box([0.2, 0.62, 0.55], [1.6, 0.9, 0.06]), // suite wall
-    box([0.2, 0.62, -0.55], [1.6, 0.9, 0.06]),
-    box([0.85, 0.55, 0], [0.45, 0.5, 0.95]), // ottoman / desk
-    box([0.98, 1.15, 0], [0.04, 0.42, 0.62]),
-  ]);
+// Each class has a fabric part and a hard-shell part (two instanced draw calls per class).
+interface SeatTemplate {
+  fabric: () => BufferGeometry;
+  shell: () => BufferGeometry;
+  fabricMat: MaterialKey;
+  shellMat: MaterialKey;
 }
 
-const TEMPLATES: Record<CabinClass, { geo: () => BufferGeometry; mat: MaterialKey }> = {
-  economy: { geo: economySeat, mat: 'seatFabric' },
-  premium: { geo: premiumSeat, mat: 'seatFabric' },
-  business: { geo: businessSeat, mat: 'seatFabricBiz' },
-  first: { geo: firstSuite, mat: 'seatFabricFirst' },
+const recline = (deg: number) => (-deg * Math.PI) / 180;
+
+const TEMPLATES: Record<CabinClass, SeatTemplate> = {
+  economy: {
+    fabricMat: 'seatFabric',
+    shellMat: 'plastic',
+    fabric: () =>
+      merge([
+        box([0.02, 0.45, 0], [0.46, 0.09, 0.44]),
+        box([0.2, 0.43, 0], [0.08, 0.07, 0.44], 0, -0.4), // rolled front edge
+        box([-0.22, 0.78, 0], [0.09, 0.62, 0.42], 0, recline(10)),
+        box([-0.33, 1.17, 0], [0.09, 0.17, 0.36], 0, recline(10)),
+        box([-0.32, 1.19, 0.16], [0.07, 0.15, 0.06], 0.35, recline(10)), // headrest wings
+        box([-0.32, 1.19, -0.16], [0.07, 0.15, 0.06], -0.35, recline(10)),
+      ]),
+    shell: () =>
+      merge([
+        box([-0.29, 0.86, 0], [0.04, 0.78, 0.46], 0, recline(10)), // seat-back shell
+        box([-0.3, 0.98, 0], [0.012, 0.16, 0.24], 0, recline(10)), // IFE screen bezel
+        box([-0.27, 0.72, 0], [0.02, 0.02, 0.36], 0, recline(10)), // tray-table edge
+        box([0.0, 0.62, 0.235], [0.44, 0.04, 0.05]), // armrests
+        box([0.0, 0.62, -0.235], [0.44, 0.04, 0.05]),
+        box([0.16, 0.2, 0.17], [0.05, 0.38, 0.05]), // legs
+        box([0.16, 0.2, -0.17], [0.05, 0.38, 0.05]),
+        box([-0.16, 0.2, 0.17], [0.05, 0.38, 0.05]),
+        box([-0.16, 0.2, -0.17], [0.05, 0.38, 0.05]),
+        box([0, 0.1, 0], [0.4, 0.04, 0.4]),
+      ]),
+  },
+  premium: {
+    fabricMat: 'seatFabric',
+    shellMat: 'plastic',
+    fabric: () =>
+      merge([
+        box([0.02, 0.47, 0], [0.54, 0.11, 0.5]),
+        box([-0.26, 0.84, 0], [0.11, 0.72, 0.48], 0, recline(14)),
+        box([-0.4, 1.27, 0], [0.11, 0.2, 0.4], 0, recline(14)),
+        box([0.4, 0.3, 0], [0.16, 0.06, 0.44], 0, 0.6), // leg rest
+      ]),
+    shell: () =>
+      merge([
+        box([-0.33, 0.9, 0], [0.05, 0.86, 0.54], 0, recline(14)),
+        box([-0.35, 1.02, 0], [0.012, 0.2, 0.3], 0, recline(14)),
+        box([0.02, 0.64, 0.29], [0.52, 0.06, 0.08]),
+        box([0.02, 0.64, -0.29], [0.52, 0.06, 0.08]),
+        box([0, 0.2, 0], [0.42, 0.38, 0.42]),
+      ]),
+  },
+  business: {
+    fabricMat: 'seatFabricBiz',
+    shellMat: 'plastic',
+    fabric: () =>
+      merge([
+        box([0, 0.52, 0], [1.2, 0.12, 0.58]), // seat / flat-bed surface
+        box([-0.58, 0.95, 0], [0.12, 0.8, 0.56], 0, recline(10)),
+        box([-0.66, 1.38, 0], [0.12, 0.18, 0.4], 0, recline(10)),
+      ]),
+    shell: () =>
+      merge([
+        box([0, 0.24, 0], [1.2, 0.44, 0.52]),
+        box([0.05, 0.66, 0.35], [1.35, 0.66, 0.06]), // privacy shell side
+        box([-0.68, 0.95, 0], [0.06, 0.9, 0.64], 0, recline(10)), // shell back
+        box([0.72, 0.56, 0], [0.32, 0.5, 0.6]), // ottoman / footwell
+        box([0.88, 1.02, 0], [0.04, 0.32, 0.46]), // IFE screen
+        box([0.1, 0.72, -0.34], [0.6, 0.05, 0.14]), // side console
+      ]),
+  },
+  first: {
+    fabricMat: 'seatFabricFirst',
+    shellMat: 'galley',
+    fabric: () =>
+      merge([
+        box([0, 0.52, 0], [0.92, 0.16, 0.68]),
+        box([-0.46, 1.0, 0], [0.14, 0.9, 0.7], 0, recline(8)),
+        box([-0.53, 1.48, 0], [0.12, 0.2, 0.46], 0, recline(8)),
+      ]),
+    shell: () =>
+      merge([
+        box([0, 0.24, 0], [0.9, 0.44, 0.6]),
+        box([0.25, 0.68, 0.56], [1.75, 0.95, 0.06]), // suite walls
+        box([0.25, 0.68, -0.56], [1.75, 0.95, 0.06]),
+        box([0.86, 0.56, 0], [0.46, 0.52, 0.96]), // ottoman / desk
+        box([1.0, 1.16, 0], [0.04, 0.44, 0.64]), // screen
+      ]),
+  },
 };
 
-function seatInstances(cls: CabinClass, seats: SeatRecord[]): InstancedMesh {
+function seatInstances(cls: CabinClass, seats: SeatRecord[], part: 'fabric' | 'shell'): InstancedMesh {
   const list = seats.filter((s) => s.cls === cls);
-  const im = new InstancedMesh(TEMPLATES[cls].geo(), mat(TEMPLATES[cls].mat), list.length);
-  im.name = `seats_${cls}`;
+  const t = TEMPLATES[cls];
+  const im = new InstancedMesh(t[part](), mat(part === 'fabric' ? t.fabricMat : t.shellMat), list.length);
+  im.name = `seats_${cls}_${part}`;
   im.userData.partId = 'seats';
   const m = new Matrix4();
   const q = new Quaternion();
@@ -277,7 +321,10 @@ function ceilingLights(deck: keyof typeof DECKS): BufferGeometry {
 export function buildCabin(): Group {
   const g = group('cabin', [], 'cabin');
   const seats = seatMap();
-  for (const cls of ['first', 'business', 'premium', 'economy'] as CabinClass[]) g.add(seatInstances(cls, seats));
+  for (const cls of ['first', 'business', 'premium', 'economy'] as CabinClass[]) {
+    g.add(seatInstances(cls, seats, 'fabric'));
+    g.add(seatInstances(cls, seats, 'shell'));
+  }
   g.userData.seatMap = seats.map((s) => [s.id, s.deck, s.cls, s.row, s.letter, +s.s.toFixed(3), s.z, s.window ? 1 : 0, s.facing]);
 
   for (const deck of ['main', 'upper'] as const) {

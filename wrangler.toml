@@ -1,0 +1,4 @@
+# Cloudflare Pages project (free tier). Deploy with:  npm run build && npx wrangler pages deploy
+name = "a380-digital-twin"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"

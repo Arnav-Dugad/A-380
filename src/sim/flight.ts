@@ -55,8 +55,8 @@ const HL = [
   { dCL: 0.08, clMax: 1.78, dCD: 0.007, dCm: -0.01 },
   { dCL: 0.35, clMax: 2.0, dCD: 0.016, dCm: -0.04 },
   { dCL: 0.45, clMax: 2.1, dCD: 0.028, dCm: -0.06 },
-  { dCL: 0.6, clMax: 2.25, dCD: 0.048, dCm: -0.08 },
-  { dCL: 0.75, clMax: 2.45, dCD: 0.078, dCm: -0.11 },
+  { dCL: 0.5, clMax: 2.25, dCD: 0.048, dCm: -0.08 },
+  { dCL: 0.62, clMax: 2.45, dCD: 0.078, dCm: -0.11 },
 ]
 
 // ------------------------------------------------------------------- atmosphere
@@ -548,7 +548,7 @@ export class FlightModel {
 
 export const flight = new FlightModel();
 
-/** Approximate trimmed pitch attitude (deg) for steady flight — used to start airborne scenarios. */
+/** Approximate trimmed pitch attitude (deg) for steady flight at a given TRUE airspeed — used to start airborne scenarios. */
 export function trimPitch(speedKt: number, altM: number, conf: number, mass: number, gammaDeg: number): number {
   const air = isa(altM);
   const V = speedKt / KT;
