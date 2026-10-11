@@ -6,6 +6,7 @@ import { getControls } from '../camera/controls';
 import { getRig } from '../aircraft/rig';
 import { useUI } from '../state/ui';
 import { systems } from '../sim/systems';
+import { firstPerson } from '../camera/FirstPerson';
 
 export interface Bridge {
   ready: () => boolean;
@@ -38,6 +39,6 @@ export function installBridge(): void {
       return { nodes: r.nodes.size, articulated: r.articulated.size, meshes: r.meshes.length, parts: [...r.partMeshes.keys()] };
     },
     systems,
-    extra: {},
+    extra: { firstPerson },
   };
 }

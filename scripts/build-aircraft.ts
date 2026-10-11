@@ -9,10 +9,10 @@ import { mkdirSync, writeFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document, Logger, NodeIO, type Node as GNode } from '@gltf-transform/core';
-import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions';
+import { EXTMeshGPUInstancing, EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions';
 import { meshopt, prune } from '@gltf-transform/functions';
 import { MeshoptEncoder } from 'meshoptimizer';
-import { Mesh, type BufferGeometry, type Object3D } from 'three';
+import { InstancedMesh, Matrix4, Mesh, Quaternion, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { ASSETS, buildAsset, type AssetName } from '../src/aircraft/geometry/aircraft';
 import { buildCabin } from '../src/aircraft/geometry/cabin';
 import { buildCockpit } from '../src/aircraft/geometry/cockpit';
@@ -62,6 +62,8 @@ function exportGroup(group: Object3D, file: string): { tris: number; meshes: num
     return m;
   };
 
+  let inst: EXTMeshGPUInstancing | null = null;
+  const instancing = () => (inst ??= doc.createExtension(EXTMeshGPUInstancing).setRequired(true));
   const convert = (obj: Object3D): GNode => {
     const node = doc.createNode(obj.name);
     node.setTranslation([obj.position.x, obj.position.y, obj.position.z]);
@@ -93,6 +95,31 @@ function exportGroup(group: Object3D, file: string): { tris: number; meshes: num
       prim.setMaterial(material(matName));
       node.setMesh(doc.createMesh(obj.name).addPrimitive(prim));
       meshes++;
+      if (obj instanceof InstancedMesh) {
+        const n = obj.count;
+        const t = new Float32Array(n * 3);
+        const r = new Float32Array(n * 4);
+        const sc = new Float32Array(n * 3);
+        const m = new Matrix4();
+        const p = new Vector3();
+        const q = new Quaternion();
+        const s = new Vector3();
+        for (let i = 0; i < n; i++) {
+          obj.getMatrixAt(i, m);
+          m.decompose(p, q, s);
+          t.set([p.x, p.y, p.z], i * 3);
+          r.set([q.x, q.y, q.z, q.w], i * 4);
+          sc.set([s.x, s.y, s.z], i * 3);
+        }
+        const ext = instancing();
+        const batch = ext
+          .createInstancedMesh()
+          .setAttribute('TRANSLATION', doc.createAccessor().setType('VEC3').setArray(t).setBuffer(buffer))
+          .setAttribute('ROTATION', doc.createAccessor().setType('VEC4').setArray(r).setBuffer(buffer))
+          .setAttribute('SCALE', doc.createAccessor().setType('VEC3').setArray(sc).setBuffer(buffer));
+        node.setExtension('EXT_mesh_gpu_instancing', batch);
+        tris += (idx ? idx.count / 3 : 0) * (n - 1);
+      }
     }
     for (const c of obj.children) node.addChild(convert(c));
     return node;
@@ -104,7 +131,7 @@ function exportGroup(group: Object3D, file: string): { tris: number; meshes: num
   pending.push(
     (async () => {
       await doc.transform(prune({ keepLeaves: true, keepAttributes: true, keepExtras: true }), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
-      const io = new NodeIO().registerExtensions([EXTMeshoptCompression, KHRMeshQuantization]).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
+      const io = new NodeIO().registerExtensions([EXTMeshoptCompression, KHRMeshQuantization, EXTMeshGPUInstancing]).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
       const glb = await io.writeBinary(doc);
       writeFileSync(join(outDir, file), glb);
     })(),

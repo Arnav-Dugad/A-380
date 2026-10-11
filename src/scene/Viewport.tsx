@@ -6,6 +6,9 @@ import { AircraftAnimator } from '../animation/AircraftAnimator';
 import { StructureLayer } from '../aircraft/AircraftLayers';
 import { Exploder } from '../aircraft/Exploder';
 import { SectionPlanes } from '../aircraft/SectionPlanes';
+import { FirstPersonRig } from '../camera/FirstPerson';
+import { CabinScene } from '../interior/CabinScene';
+import { CockpitScene } from '../interior/CockpitScene';
 import { useUI } from '../state/ui';
 import { setControls } from '../camera/controls';
 
@@ -32,6 +35,9 @@ export function Viewport() {
       <Exploder />
       <SectionPlanes />
       <StructureLayer />
+      <CockpitScene />
+      <CabinScene />
+      <FirstPersonRig />
       <ContactShadows position={[0, 0.01, 0]} scale={140} blur={2.4} far={14} opacity={0.65} resolution={1024} />
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <circleGeometry args={[300, 64]} />
