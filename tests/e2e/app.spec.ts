@@ -127,6 +127,9 @@ test.describe('A380 digital twin', () => {
   });
 
   test('cabin: walk the main deck and change deck', async ({ page }) => {
+    // The 1.4 M-triangle cabin renders at ~0.2 fps under software rendering, and walking is
+    // capped per frame, so this test needs more wall-clock time than the others.
+    test.setTimeout(420_000);
     await openApp(page);
     await page.keyboard.press('5');
     await expect(page.getByRole('heading', { name: 'Two passenger decks' })).toBeVisible();
@@ -135,6 +138,7 @@ test.describe('A380 digital twin', () => {
     await page.waitForFunction(() => (window.__a380!.extra.firstPerson as { pose: () => { pos: number[] } }).pose().pos[1]! > 6, null, { timeout: 60_000 });
     await page.waitForTimeout(2000);
     const p0 = await page.evaluate(() => (window.__a380!.extra.firstPerson as { pose: () => { pos: number[] } }).pose().pos);
+    await page.keyboard.down('Shift');
     await page.keyboard.down('w');
     await page.waitForFunction(
       (p) => {
@@ -142,9 +146,10 @@ test.describe('A380 digital twin', () => {
         return Math.hypot(q[0]! - p[0]!, q[2]! - p[2]!) > 0.5;
       },
       p0,
-      { timeout: 60_000 },
+      { timeout: 180_000 },
     );
     await page.keyboard.up('w');
+    await page.keyboard.up('Shift');
     await page.getByRole('radio', { name: 'Upper deck' }).click();
     await page.waitForFunction(() => (window.__a380!.extra.firstPerson as { pose: () => { pos: number[] } }).pose().pos[1]! > 9, null, { timeout: 60_000 });
     await page.screenshot({ path: 'test-results/05-cabin.png' });
