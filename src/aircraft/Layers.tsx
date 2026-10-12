@@ -5,12 +5,15 @@
 import { useGLTF } from '@react-three/drei';
 import { useEffect, useMemo } from 'react';
 import type { Group } from 'three';
+import { useUI } from '../state/ui';
 import { assetUrl, type InteriorAsset } from './assets';
 import { prepareScene } from './prepare';
 import { attachRoot, detachRoot } from './rig';
 
 export function LazyLayer({ name, visible, onReady }: { name: InteriorAsset | 'structure'; visible: boolean; onReady?: (root: Group) => void }) {
-  const gltf = useGLTF(assetUrl(name as InteriorAsset), false, true);
+  // phones (Performance preset) get the lighter cabin
+  const lod = name === 'cabin' && useUI.getState().quality === 'performance' ? 'lo' : 'hi';
+  const gltf = useGLTF(assetUrl(name as InteriorAsset, lod), false, true);
   const root = useMemo(() => {
     const r = gltf.scene as Group;
     prepareScene(r, { shadows: name !== 'cabin' });

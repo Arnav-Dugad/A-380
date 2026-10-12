@@ -109,6 +109,33 @@ export function makeLiveryTextures(): { map: Texture; bump: Texture; rough: Text
   // Ice-blue pin stripe under the main deck windows
   band(ctx, 7.5, 60.5, (s) => MAIN_DECK_FLOOR + 0.62 + (s > 50 ? (s - 50) * 0.05 : 0), (s) => MAIN_DECK_FLOOR + 0.69 + (s > 50 ? (s - 50) * 0.05 : 0), '#6fd3ef');
   band(ctx, 52, L, (s) => 10.6 - Math.pow(Math.max(0, s - 48) / 24.7, 1.6) * 3.8 - 0.14, (s) => 10.6 - Math.pow(Math.max(0, s - 48) / 24.7, 1.6) * 3.8 - 0.08, '#6fd3ef');
+  // Weathering (kept subtle): panel-to-panel tone variation, grime on the lower fuselage and
+  // behind the main-gear bays, and APU soot on the tail cone.
+  {
+    let seed = 5;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const joints = [2.3, 5.9, 11.8, 17.3, 22.8, 28.1, 33.5, 39.0, 44.4, 49.6, 54.8, 59.9, 64.6, 68.8, L];
+    for (let k = 0; k < joints.length - 1; k++) {
+      for (const [y0, y1] of [
+        [0, 3.4],
+        [3.4, MAIN_DECK_FLOOR + 1.8],
+        [MAIN_DECK_FLOOR + 1.8, UPPER_DECK_FLOOR + 1.75],
+        [UPPER_DECK_FLOOR + 1.75, 12],
+      ] as const) {
+        ctx.globalAlpha = 0.012 + rnd() * 0.02;
+        band(ctx, joints[k]!, joints[k + 1]!, () => y0, () => y1, rnd() > 0.5 ? '#ffffff' : '#7d838a');
+      }
+    }
+    for (let i = 0; i < 6; i++) {
+      ctx.globalAlpha = 0.018;
+      band(ctx, 31 + i * 0.6, 52 - i * 0.4, () => 0, () => 2.2 + i * 0.25, '#4b4f55');
+    }
+    for (let i = 0; i < 8; i++) {
+      ctx.globalAlpha = 0.035;
+      band(ctx, 64 + i * 0.9, L, () => 0, () => 12, '#2b2a28');
+    }
+    ctx.globalAlpha = 1;
+  }
   // Black anti-glare / cockpit window surround
   text(ctx, 'A380', 22.5, UPPER_DECK_FLOOR + 1.0, 64, '#1d2329', '300 "Inter", "Helvetica Neue", Arial, sans-serif', 18);
   text(ctx, 'DIGITAL TWIN', 33.5, UPPER_DECK_FLOOR + 1.0, 46, '#1d2329', '500 "Inter", "Helvetica Neue", Arial, sans-serif', 24);
@@ -182,10 +209,10 @@ export function makeLiveryTextures(): { map: Texture; bump: Texture; rough: Text
 }
 
 /** Small tiling noise used to break up uniform surfaces. */
-function noiseTexture(size = 256, base = 128, amp = 40): Texture {
+function noiseTexture(size = 256, base = 128, amp = 40, seed0 = 13): Texture {
   const [c, ctx] = canvas(size, size);
   const img = ctx.createImageData(size, size);
-  let seed = 13;
+  let seed = seed0;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < img.data.length; i += 4) {
     const v = base + (rnd() - 0.5) * amp;
@@ -199,6 +226,106 @@ function noiseTexture(size = 256, base = 128, amp = 40): Texture {
   return t;
 }
 
+/** Tiling texture drawn by `paint`, with repeat and colour space set. */
+function tile(size: number, repeat: [number, number], srgb: boolean, paint: (ctx: CanvasRenderingContext2D, rnd: () => number) => void): Texture {
+  const [c, ctx] = canvas(size, size);
+  let seed = 29;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  paint(ctx, rnd);
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.repeat.set(...repeat);
+  t.anisotropy = 8;
+  t.colorSpace = srgb ? SRGBColorSpace : LinearSRGBColorSpace;
+  return t;
+}
+
+/** Plain-weave upholstery: fine over/under threads as a bump map. */
+const weaveBump = () =>
+  tile(128, [10, 10], false, (ctx, rnd) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, 128, 128);
+    for (let y = 0; y < 128; y += 4) {
+      for (let x = 0; x < 128; x += 4) {
+        const over = ((x + y) / 4) % 2 === 0;
+        const v = (over ? 170 : 90) + (rnd() - 0.5) * 30;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(x, y, over ? 4 : 3, over ? 3 : 4);
+      }
+    }
+  });
+
+/** Leather grain: soft cellular pebbling. */
+const leatherBump = () =>
+  tile(256, [6, 6], false, (ctx, rnd) => {
+    ctx.fillStyle = '#9a9a9a';
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2600; i++) {
+      const v = 80 + rnd() * 90;
+      ctx.fillStyle = `rgba(${v},${v},${v},0.55)`;
+      ctx.beginPath();
+      ctx.arc(rnd() * 256, rnd() * 256, 1.5 + rnd() * 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+/** Cabin carpet: heathered loop pile with a quiet repeating motif. */
+const carpetMap = () =>
+  tile(512, [70, 9], true, (ctx, rnd) => {
+    ctx.fillStyle = '#2f3845';
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 26000; i++) {
+      const v = rnd();
+      ctx.fillStyle = v > 0.5 ? `rgba(70,84,102,${0.25 + rnd() * 0.3})` : `rgba(20,25,32,${0.25 + rnd() * 0.3})`;
+      ctx.fillRect(rnd() * 512, rnd() * 512, 2, 2);
+    }
+    ctx.strokeStyle = 'rgba(111,160,190,0.22)';
+    ctx.lineWidth = 3;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.arc(128 + (k % 2) * 256, 128 + Math.floor(k / 2) * 256, 70, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  });
+
+/** Seat-back entertainment screen: a moving-map style idle screen. */
+function ifeTexture(): Texture {
+  const [c, ctx] = canvas(256, 160);
+  const g = ctx.createLinearGradient(0, 0, 0, 160);
+  g.addColorStop(0, '#0c2a4a');
+  g.addColorStop(1, '#06121f');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 160);
+  ctx.fillStyle = 'rgba(62,120,96,0.55)';
+  for (const [x, y, r] of [
+    [60, 70, 34],
+    [100, 92, 22],
+    [182, 60, 40],
+    [205, 112, 18],
+  ] as const) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * 1.4, r, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#ffd27a';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(40, 110);
+  ctx.quadraticCurveTo(128, 20, 215, 88);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '600 13px "Inter", Arial, sans-serif';
+  ctx.fillText('A380 · DIGITAL TWIN', 12, 22);
+  ctx.font = '11px "Inter", Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText('Time to destination 6:42', 12, 148);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
 export type MaterialLibrary = Record<MaterialKey | 'livery', Material>;
 
 let library: MaterialLibrary | null = null;
@@ -207,55 +334,67 @@ export function getMaterials(): MaterialLibrary {
   if (library) return library;
   const livery = makeLiveryTextures();
   const noise = noiseTexture();
-  const paint = (color: string, rough = 0.32, extra: Partial<MeshPhysicalMaterial> = {}) =>
-    new MeshPhysicalMaterial({ color: new Color(color), roughness: rough, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.18, ...extra });
+  const fine = noiseTexture(256, 128, 70, 41);
+  fine.repeat.set(24, 24);
+  const paint = (color: string, rough = 0.3, extra: Partial<MeshPhysicalMaterial> = {}) =>
+    new MeshPhysicalMaterial({ color: new Color(color), roughness: rough, metalness: 0, clearcoat: 0.75, clearcoatRoughness: 0.12, roughnessMap: noise, ...extra });
+  const phys = (color: string, roughness: number, metalness: number, extra: Partial<MeshPhysicalMaterial> = {}) => new MeshPhysicalMaterial({ color: new Color(color), roughness, metalness, ...extra });
   const std = (color: string, roughness: number, metalness: number, extra: Partial<MeshStandardMaterial> = {}) =>
     new MeshStandardMaterial({ color: new Color(color), roughness, metalness, ...extra });
   const emissive = (color: string, intensity: number) =>
     new MeshStandardMaterial({ color: new Color('#111'), emissive: new Color(color), emissiveIntensity: intensity, roughness: 0.3 });
+  const fabric = (color: string, sheen: string) =>
+    new MeshPhysicalMaterial({ color: new Color(color), roughness: 0.92, metalness: 0, sheen: 1, sheenColor: new Color(sheen), sheenRoughness: 0.55, bumpMap: weaveBump(), bumpScale: 0.6 });
+  const ife = ifeTexture();
 
   library = {
     livery: new MeshPhysicalMaterial({
       map: livery.map,
       bumpMap: livery.bump,
-      bumpScale: 0.6,
-      roughness: 0.3,
+      bumpScale: 0.55,
+      roughness: 0.26,
       roughnessMap: livery.rough,
       metalness: 0,
-      clearcoat: 0.7,
-      clearcoatRoughness: 0.14,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.1,
     }),
-    paint: paint('#f2f3f4', 0.34, { roughnessMap: noise }),
-    paintBelly: paint('#b9bfc5', 0.42),
-    paintTail: paint('#1d2329', 0.3),
-    composite: paint('#dfe2e5', 0.48, { clearcoat: 0.2 }),
-    leadingEdge: std('#cfd3d8', 0.36, 0.55, { roughnessMap: noise }),
-    metal: std('#a9adb2', 0.34, 1),
-    darkMetal: std('#3a3e43', 0.46, 0.65),
-    chrome: std('#e6e8ea', 0.08, 1),
-    tyre: std('#141516', 0.86, 0),
-    hub: std('#9a9ea3', 0.36, 0.9),
-    glass: new MeshPhysicalMaterial({ color: new Color('#0b1218'), roughness: 0.04, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.6 }),
-    window: new MeshPhysicalMaterial({ color: new Color('#0a0f14'), roughness: 0.06, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.03 }),
+    paint: paint('#f1f2f3', 0.3),
+    paintBelly: paint('#c3c8cd', 0.38, { clearcoat: 0.5 }),
+    paintTail: paint('#1d2329', 0.28),
+    composite: paint('#e2e5e8', 0.42, { clearcoat: 0.35 }),
+    // painted leading edges and slats, slightly satin from erosion
+    leadingEdge: paint('#d9dde1', 0.36, { clearcoat: 0.25, metalness: 0.08 }),
+    inletLip: phys('#dde1e5', 0.12, 1, { anisotropy: 0.6, roughnessMap: fine }),
+    metal: phys('#a9adb2', 0.32, 1, { anisotropy: 0.4 }),
+    darkMetal: std('#3a3e43', 0.5, 0.6),
+    gearPaint: phys('#d6d9dc', 0.34, 0, { clearcoat: 0.45, clearcoatRoughness: 0.25, roughnessMap: noise }),
+    chrome: phys('#f3f5f7', 0.05, 1),
+    tyre: phys('#18191a', 0.78, 0, { roughnessMap: fine, sheen: 0.25, sheenColor: new Color('#3a3a3a'), sheenRoughness: 0.8 }),
+    hub: phys('#b6babf', 0.3, 1, { anisotropy: 0.3 }),
+    glass: new MeshPhysicalMaterial({ color: new Color('#0d171d'), roughness: 0.02, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.01, specularIntensity: 1, ior: 1.6, envMapIntensity: 2.2 }),
+    window: new MeshPhysicalMaterial({ color: new Color('#0b1116'), roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.55, envMapIntensity: 1.8 }),
     seal: std('#16191c', 0.6, 0.1),
-    fan: std('#9ea5ad', 0.28, 1, { side: DoubleSide }),
-    inlet: std('#1b1e22', 0.55, 0.4),
-    exhaust: std('#5d5650', 0.5, 0.9),
+    fan: phys('#9aa1a9', 0.24, 1, { side: DoubleSide, anisotropy: 0.5 }),
+    inlet: std('#2a2e33', 0.62, 0.3),
+    exhaust: phys('#6a5e54', 0.42, 0.95, { roughnessMap: noise }),
     lightRed: emissive('#ff2a2a', 4),
     lightGreen: emissive('#2aff6a', 4),
     lightWhite: emissive('#ffffff', 5),
     lightAmber: emissive('#ffb347', 3),
-    cabinWall: std('#e9e6df', 0.7, 0, { side: DoubleSide }),
+    cabinWall: std('#ece9e3', 0.62, 0, { side: DoubleSide, roughnessMap: noise }),
     cabinFloor: std('#3d4148', 0.8, 0),
-    carpet: std('#38404a', 0.95, 0),
-    seatFabric: std('#3e4c5c', 0.9, 0),
-    seatFabricBiz: std('#2c3138', 0.75, 0),
-    seatFabricFirst: std('#6e5d4a', 0.7, 0),
-    plastic: std('#d9d7d2', 0.55, 0),
-    galley: std('#b9bcc0', 0.3, 0.8),
-    cockpitPanel: std('#3b4148', 0.75, 0.1),
-    cockpitTrim: std('#2a2e33', 0.6, 0.2),
+    carpet: std('#ffffff', 1, 0, { map: carpetMap() }),
+    seatFabric: fabric('#2c3a4e', '#7f93ad'),
+    seatFabricBiz: fabric('#2a2e35', '#8a929c'),
+    seatFabricFirst: fabric('#6d5c49', '#c9b79f'),
+    leather: phys('#7a5f45', 0.48, 0, { clearcoat: 0.25, clearcoatRoughness: 0.4, bumpMap: leatherBump(), bumpScale: 0.5, sheen: 0.4, sheenColor: new Color('#b49a7e') }),
+    plastic: phys('#e3e0da', 0.42, 0, { clearcoat: 0.15, clearcoatRoughness: 0.5 }),
+    bezel: phys('#dcd9d3', 0.36, 0, { clearcoat: 0.2 }),
+    galley: phys('#c9ccd0', 0.3, 1, { anisotropy: 0.7 }),
+    cockpitPanel: std('#4f5862', 0.72, 0.05, { roughnessMap: noise }),
+    cockpitTrim: std('#23272c', 0.55, 0.15),
     screen: std('#000000', 0.25, 0, { emissive: new Color('#ffffff'), emissiveIntensity: 1 }),
+    ifeScreen: std('#000000', 0.2, 0, { map: ife, emissive: new Color('#ffffff'), emissiveMap: ife, emissiveIntensity: 0.85 }),
     structure: std('#7f8994', 0.5, 0.6),
     cargo: std('#8a8f96', 0.6, 0.5),
     emissiveCabin: emissive('#fff4e0', 1.6),

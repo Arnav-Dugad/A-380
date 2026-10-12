@@ -10,7 +10,7 @@
 import { BufferAttribute, BufferGeometry, type Group } from 'three';
 import { COCKPIT_FLOOR, sx } from './layout';
 import { fuselagePoint, thetaAtHeight } from './fuselage';
-import { box, cylinder } from './gear';
+import { box, cylinder, rbox } from './gear';
 import { deg, lerp, type Vec3 } from './math';
 import { group, mesh, pivoted, type MaterialKey } from './parts';
 import { merge } from './surface';
@@ -196,18 +196,60 @@ function overhead(): Group {
     const y = lerp(yA, yB, (s - sA) / (sB - sA)) - 0.032;
     g.add(pushButton(b.id, [sx(s), y, z], b.label));
   }
+  const field = overheadField(sA, sB, yA, yB);
+  g.add(mesh('overhead_subpanels', field.panels, 'cockpitPanel', 'cockpitPanel'));
+  g.add(mesh('overhead_switches', field.switches, 'cockpitTrim', 'cockpitPanel'));
   return g;
 }
 
-function seat(c: Vec3): BufferGeometry {
-  return merge([
-    box([c[0], c[1] + 0.48, c[2]], [0.55, 0.12, 0.52]),
-    box([c[0] - 0.3, c[1] + 0.95, c[2]], [0.12, 0.85, 0.52], 0, -0.12),
-    box([c[0] - 0.36, c[1] + 1.45, c[2]], [0.1, 0.2, 0.32], 0, -0.12),
-    box([c[0], c[1] + 0.22, c[2]], [0.3, 0.4, 0.3]),
-    box([c[0] + 0.02, c[1] + 0.7, c[2] - 0.29], [0.42, 0.06, 0.06]),
-    box([c[0] + 0.02, c[1] + 0.7, c[2] + 0.29], [0.42, 0.06, 0.06]),
+/** Crew seat: contoured cushions with lumbar and headrest, armrests, and a column on floor rails. */
+function seat(c: Vec3): { fabric: BufferGeometry; frame: BufferGeometry } {
+  const r = -0.12;
+  const fabric = merge([
+    rbox([c[0], c[1] + 0.5, c[2]], [0.52, 0.12, 0.5], 0.05, -0.04),
+    rbox([c[0] - 0.29, c[1] + 0.96, c[2]], [0.13, 0.8, 0.5], 0.06, r, 0, 0, 0.35),
+    rbox([c[0] - 0.36, c[1] + 1.45, c[2]], [0.12, 0.22, 0.34], 0.06, r),
+    rbox([c[0] - 0.24, c[1] + 0.75, c[2]], [0.06, 0.18, 0.42], 0.03, r),
   ]);
+  const frame = merge([
+    rbox([c[0], c[1] + 0.41, c[2]], [0.5, 0.06, 0.46], 0.02),
+    rbox([c[0] - 0.32, c[1] + 0.95, c[2]], [0.05, 0.84, 0.46], 0.02, r),
+    rbox([c[0] + 0.02, c[1] + 0.7, c[2] - 0.29], [0.42, 0.06, 0.07], 0.025),
+    rbox([c[0] + 0.02, c[1] + 0.7, c[2] + 0.29], [0.42, 0.06, 0.07], 0.025),
+    cylinder([c[0], c[1] + 0.06, c[2]], [c[0], c[1] + 0.4, c[2]], 0.07, 16),
+    rbox([c[0], c[1] + 0.04, c[2]], [0.6, 0.06, 0.34], 0.02),
+    box([c[0], c[1] + 0.005, c[2] - 0.14], [1.1, 0.012, 0.05]),
+    box([c[0], c[1] + 0.005, c[2] + 0.14], [1.1, 0.012, 0.05]),
+  ]);
+  return { fabric, frame };
+}
+
+/**
+ * Decorative overhead switch field (systems not modelled as operable controls): rows of
+ * guarded push-buttons, toggle switches and rotary knobs on sub-panels with lit legends.
+ */
+function overheadField(sA: number, sB: number, yA: number, yB: number): { panels: BufferGeometry; switches: BufferGeometry } {
+  const panels: BufferGeometry[] = [];
+  const sw: BufferGeometry[] = [];
+  const tilt = Math.atan2(yB - yA, sB - sA);
+  const yAt = (s: number) => lerp(yA, yB, (s - sA) / (sB - sA)) - 0.028;
+  let seed = 17;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let row = 0; row < 9; row++) {
+    const s = lerp(sA + 0.12, sB - 0.12, row / 8);
+    for (const zc of [-0.36, 0.36]) {
+      panels.push(rbox([sx(s), yAt(s) + 0.004, zc], [0.18, 0.006, 0.26], 0.003, tilt));
+      const n = 3 + Math.floor(rnd() * 3);
+      for (let k = 0; k < n; k++) {
+        const z = zc - 0.1 + (0.2 * k) / Math.max(1, n - 1);
+        const kind = rnd();
+        if (kind < 0.5) sw.push(rbox([sx(s), yAt(s) - 0.004, z], [0.03, 0.012, 0.03], 0.004, tilt));
+        else if (kind < 0.8) sw.push(cylinder([sx(s), yAt(s), z], [sx(s), yAt(s) - 0.02, z], 0.011, 10), box([sx(s - 0.008), yAt(s) - 0.024, z], [0.02, 0.006, 0.008]));
+        else sw.push(cylinder([sx(s), yAt(s), z], [sx(s), yAt(s) - 0.012, z], 0.016, 12, 0.012));
+      }
+    }
+  }
+  return { panels: merge(panels), switches: merge(sw) };
 }
 
 export function buildCockpit(): Group {
@@ -218,9 +260,24 @@ export function buildCockpit(): Group {
 
   // Main instrument panel and glareshield
   const panelS = 3.98;
-  g.add(mesh('main_panel', box([sx(panelS), F + 0.82, 0], [0.06, 0.62, 2.5], 0, deg(-14)), 'cockpitPanel', 'cockpitPanel'));
-  g.add(mesh('glareshield', box([sx(panelS - 0.1), F + 1.14, 0], [0.42, 0.06, 2.4]), 'cockpitTrim', 'cockpitPanel'));
-  g.add(mesh('fcu_body', box([sx(panelS - 0.02), F + 1.08, 0], [0.12, 0.1, 1.1]), 'cockpitPanel', 'cockpitPanel'));
+  g.add(mesh('main_panel', rbox([sx(panelS), F + 0.82, 0], [0.06, 0.62, 2.5], 0.02, deg(-14)), 'cockpitPanel', 'cockpitPanel'));
+  g.add(
+    mesh(
+      'glareshield',
+      rbox([sx(panelS - 0.1), F + 1.14, 0], [0.42, 0.06, 2.4], 0.025),
+      'cockpitTrim',
+      'cockpitPanel',
+    ),
+  );
+  g.add(mesh('fcu_body', rbox([sx(panelS - 0.02), F + 1.08, 0], [0.12, 0.1, 1.1], 0.015), 'cockpitPanel', 'cockpitPanel'));
+  // EFIS control panels at both ends of the glareshield: baro, range and mode knobs
+  const efis: BufferGeometry[] = [];
+  for (const zc of [-0.82, 0.82]) {
+    efis.push(rbox([sx(panelS - 0.01), F + 1.08, zc], [0.11, 0.1, 0.36], 0.012));
+    for (const dz of [-0.11, 0, 0.11]) efis.push(cylinder([sx(panelS + 0.04), F + 1.08, zc + dz], [sx(panelS + 0.075), F + 1.08, zc + dz], 0.019, 14, 0.016));
+  }
+  for (const dz of [-0.36, -0.12, 0.12, 0.36]) efis.push(cylinder([sx(panelS + 0.04), F + 1.06, dz], [sx(panelS + 0.07), F + 1.06, dz], 0.017, 14, 0.015));
+  g.add(mesh('efis_controls', merge(efis), 'cockpitTrim', 'cockpitPanel'));
   g.add(display('FCU', [sx(panelS + 0.045), F + 1.08, 0], 0, 0.95, 0.07));
 
   // Eight identical 150 × 200 mm LCDs
@@ -236,11 +293,18 @@ export function buildCockpit(): Group {
   // Centre pedestal
   const pedS0 = 4.25;
   const pedS1 = 5.55;
-  g.add(mesh('pedestal', box([sx((pedS0 + pedS1) / 2), F + 0.36, 0], [pedS1 - pedS0, 0.72, 0.62]), 'cockpitPanel', 'cockpitPanel'));
+  g.add(mesh('pedestal', rbox([sx((pedS0 + pedS1) / 2), F + 0.36, 0], [pedS1 - pedS0, 0.72, 0.62], 0.03), 'cockpitPanel', 'cockpitPanel'));
   g.add(display('MFD_C', [sx(4.36), F + 0.62, -0.2], deg(55), 0.15, 0.2));
   g.add(display('MFD_F', [sx(4.36), F + 0.62, 0.2], deg(55), 0.15, 0.2));
   // KCCUs (keyboards)
-  g.add(mesh('kccu', merge([box([sx(5.0), F + 0.76, -0.2], [0.34, 0.04, 0.2], 0, deg(-8)), box([sx(5.0), F + 0.76, 0.2], [0.34, 0.04, 0.2], 0, deg(-8))]), 'cockpitTrim', 'cockpitPanel'));
+  // KCCUs: keyboard and cursor control units with a key grid and trackball
+  const kccu: BufferGeometry[] = [];
+  for (const zc of [-0.2, 0.2]) {
+    kccu.push(rbox([sx(5.0), F + 0.76, zc], [0.34, 0.04, 0.2], 0.012, deg(-8)));
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 8; j++) kccu.push(rbox([sx(4.88 + i * 0.033), F + 0.782 + i * 0.0046, zc - 0.075 + j * 0.0215], [0.024, 0.008, 0.017], 0.003, deg(-8)));
+    kccu.push(cylinder([sx(5.12), F + 0.79, zc], [sx(5.12), F + 0.8, zc], 0.022, 16));
+  }
+  g.add(mesh('kccu', merge(kccu), 'cockpitTrim', 'cockpitPanel'));
 
   // Thrust levers (4) — pivot on the pedestal, rotate about Z (forward = more thrust)
   const tlPivot = (z: number): Vec3 => [sx(4.72), F + 0.7, z];
@@ -249,7 +313,7 @@ export function buildCockpit(): Group {
     g.add(
       control(`thrust${i + 1}`, `THRUST_${i + 1}`, p, [
         [box([p[0], p[1] + 0.12, p[2]], [0.025, 0.24, 0.022]), 'darkMetal'],
-        [box([p[0], p[1] + 0.25, p[2]], [0.05, 0.035, 0.05]), 'cockpitTrim'],
+        [rbox([p[0], p[1] + 0.25, p[2]], [0.055, 0.04, 0.055], 0.015), 'cockpitTrim'],
       ], [0, 0, 1], -20, 35),
     );
   });
@@ -279,19 +343,23 @@ export function buildCockpit(): Group {
 
   // Side consoles with side-sticks
   for (const side of [-1, 1] as const) {
-    g.add(mesh(`console_${side}`, box([sx(5.0), F + 0.58, side * 1.02], [1.4, 0.1, 0.32]), 'cockpitPanel', 'cockpitPanel'));
+    g.add(mesh(`console_${side}`, rbox([sx(5.0), F + 0.58, side * 1.02], [1.4, 0.1, 0.32], 0.03), 'cockpitPanel', 'cockpitPanel'));
+    g.add(mesh(`armrest_${side}`, rbox([sx(5.25), F + 0.68, side * 1.0], [0.45, 0.06, 0.16], 0.03), 'seatFabricBiz', 'cockpitPanel'));
     const ss: Vec3 = [sx(4.75), F + 0.64, side * 1.02];
     g.add(
       control(`sidestick_${side === -1 ? 'C' : 'F'}`, 'SIDESTICK', ss, [
         [cylinder(ss, [ss[0], ss[1] + 0.14, ss[2]], 0.017, 10), 'darkMetal'],
-        [box([ss[0] + 0.005, ss[1] + 0.2, ss[2]], [0.06, 0.12, 0.05], 0, deg(10)), 'cockpitTrim'],
+        [rbox([ss[0] + 0.005, ss[1] + 0.2, ss[2]], [0.065, 0.13, 0.055], 0.025, deg(10)), 'cockpitTrim'],
+        [cylinder([ss[0], ss[1] - 0.01, ss[2]], [ss[0], ss[1] + 0.05, ss[2]], 0.045, 16, 0.025), 'tyre'],
       ], [1, 0, 0], -20, 20),
     );
     // OIT side screens
     g.add(display(side === -1 ? 'OIT_C' : 'OIT_F', [sx(4.3), F + 0.9, side * 1.15], deg(10), 0.18, 0.14));
   }
   // Crew seats
-  g.add(mesh('crew_seats', merge([seat([sx(5.35), F, -0.56]), seat([sx(5.35), F, 0.56]), seat([sx(6.6), F, -0.75])]), 'seatFabricBiz', 'cockpitPanel'));
+  const seats = [seat([sx(5.35), F, -0.56]), seat([sx(5.35), F, 0.56]), seat([sx(6.6), F, -0.75])];
+  g.add(mesh('crew_seats', merge(seats.map((x) => x.fabric)), 'seatFabricBiz', 'cockpitPanel'));
+  g.add(mesh('crew_seat_frames', merge(seats.map((x) => x.frame)), 'cockpitTrim', 'cockpitPanel'));
   // Rudder pedals
   g.add(mesh('pedals', merge([-0.66, -0.46, 0.46, 0.66].map((z) => box([sx(4.25), F + 0.12, z], [0.04, 0.24, 0.1], 0, deg(-25)))), 'darkMetal', 'cockpitPanel'));
 

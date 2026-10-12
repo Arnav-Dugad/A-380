@@ -63,7 +63,12 @@ The A380 is generated procedurally from published dimensions and the Airbus thre
 - **Landing gear:** 22 wheels, with steering on the nose gear and the body-gear rear axles.
 - **Interior:** structure, cabin and cockpit.
 
-`scripts/build-aircraft.ts` exports the geometry as meshopt-compressed glTF in two LODs.
+`scripts/build-aircraft.ts` exports the geometry as meshopt-compressed glTF in three LODs
+(about 1 M triangles at the top tier). Each vertex carries ray-traced ambient occlusion,
+baked at build time. On the screen, the aircraft is lit by CC0 HDR panoramas and uses
+physically based materials: clear-coated paint with light weathering, polished inlet lips,
+anisotropic metals, rubber and glazing. Inside, the seats are upholstered and woven fabric
+has sheen.
 Every moving part is a separate node carrying its hinge axis and limits. See
 [docs/ASSETS.md](docs/ASSETS.md) for why no third-party model is redistributed.
 

@@ -137,9 +137,9 @@ export const cabinActions = {
 };
 
 const LIGHT_PRESETS: Record<CabinLight, { strip: string; intensity: number; window: string; windowI: number; ambient: number }> = {
-  off: { strip: '#000000', intensity: 0, window: '#9fb8cc', windowI: 0.8, ambient: 0.05 },
-  boarding: { strip: '#fff1dc', intensity: 2.2, window: '#cfe3f2', windowI: 1.3, ambient: 0.6 },
-  day: { strip: '#f4f8ff', intensity: 2.6, window: '#d8ecff', windowI: 1.6, ambient: 0.7 },
+  off: { strip: '#000000', intensity: 0, window: '#7fa6c9', windowI: 0.8, ambient: 0.05 },
+  boarding: { strip: '#fff1dc', intensity: 2.2, window: '#8fbbe3', windowI: 1.15, ambient: 0.6 },
+  day: { strip: '#f4f8ff', intensity: 2.6, window: '#9cc6ec', windowI: 1.3, ambient: 0.7 },
   night: { strip: '#3a4f8a', intensity: 0.6, window: '#152033', windowI: 0.35, ambient: 0.12 },
   ambient: { strip: '#9b7bff', intensity: 1.4, window: '#5b6f8f', windowI: 0.6, ambient: 0.28 },
 };

@@ -6,13 +6,13 @@
  * Seats are exported once per class with EXT_mesh_gpu_instancing transforms, so ~470 seats
  * cost three draw calls.
  */
-import { InstancedMesh, Matrix4, Quaternion, Vector3, type BufferGeometry, type Group } from 'three';
+import { BufferAttribute, BufferGeometry, InstancedMesh, Matrix4, Quaternion, Vector3, type Group } from 'three';
 import { DOORS, MAIN_DECK_FLOOR, UPPER_DECK_FLOOR, sx } from './layout';
-import { fuselagePoint, thetaAtHeight } from './fuselage';
-import { box, cylinder } from './gear';
+import { fuselageNormal, fuselagePoint, resample, roundedRect, thetaAtHeight } from './fuselage';
+import { box, cylinder, onTilted, quadAft, rbox, setRoundingDetail } from './gear';
 import { lerp, type Vec3 } from './math';
 import { group, mat, mesh, type MaterialKey } from './parts';
-import { gridSurface, merge } from './surface';
+import { flipGeometry, gridSurface, merge } from './surface';
 import { MAIN_WINDOW_Y, UPPER_WINDOW_Y } from './airframe';
 
 export type CabinClass = 'first' | 'business' | 'premium' | 'economy';
@@ -96,105 +96,138 @@ export function seatMap(): SeatRecord[] {
 }
 
 // ------------------------------------------------------------- seat templates
-// Each class has a fabric part and a hard-shell part (two instanced draw calls per class).
+// Each class has upholstery, a hard shell and an entertainment screen: three instanced draw
+// calls per class. Local frame: +X is the direction the seat faces, Y up, floor at y = 0.
 interface SeatTemplate {
   fabric: () => BufferGeometry;
   shell: () => BufferGeometry;
+  screen: () => BufferGeometry;
   fabricMat: MaterialKey;
   shellMat: MaterialKey;
 }
 
 const recline = (deg: number) => (-deg * Math.PI) / 180;
 
+/** Tubular seat frame: four legs, two cross beams and a foot rail. */
+function frame(xF: number, xR: number, hw: number, top: number): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const x of [xF, xR]) {
+    for (const z of [-hw, hw]) {
+      parts.push(cylinder([x, 0.01, z], [x, top, z], 0.017, 10));
+      parts.push(box([x, 0.008, z], [0.09, 0.016, 0.05]));
+    }
+    parts.push(cylinder([x, top - 0.03, -hw - 0.04], [x, top - 0.03, hw + 0.04], 0.022, 12));
+  }
+  parts.push(cylinder([xF, 0.09, -hw], [xF, 0.09, hw], 0.012, 8));
+  return merge(parts);
+}
+
+function economySeat(width: number, backDeg: number, scale = 1): SeatTemplate {
+  const r = recline(backDeg);
+  const w = width;
+  const back: Vec3 = [-0.205 * scale, 0.8 * scale, 0];
+  const shellC: Vec3 = [-0.268 * scale, 0.85 * scale, 0];
+  return {
+    fabricMat: 'seatFabric',
+    shellMat: 'plastic',
+    fabric: () =>
+      merge([
+        rbox([0.04, 0.445, 0], [0.47 * scale, 0.105, w - 0.03], 0.045, -0.05),
+        rbox(back, [0.1, 0.62 * scale, w - 0.05], 0.045, r, 0, 0, 0.45),
+        rbox(onTilted(back, 0.045, -0.18 * scale, r), [0.05, 0.16, w - 0.09], 0.025, r),
+        rbox(onTilted(back, -0.1, 0.385 * scale, r), [0.1, 0.19, w * 0.78], 0.05, r),
+        rbox(onTilted(back, -0.095, 0.385 * scale, r, 0.19 * (w / 0.46)), [0.09, 0.17, 0.06], 0.025, r, 0.45),
+        rbox(onTilted(back, -0.095, 0.385 * scale, r, -0.19 * (w / 0.46)), [0.09, 0.17, 0.06], 0.025, r, -0.45),
+      ]),
+    shell: () =>
+      merge([
+        rbox(shellC, [0.045, 0.88 * scale, w], 0.02, r, 0, 0, 0.45),
+        rbox(onTilted(shellC, -0.032, -0.14 * scale, r), [0.014, 0.25, w * 0.78], 0.006, r), // tray table
+        rbox(onTilted(shellC, -0.034, -0.02 * scale, r), [0.012, 0.03, 0.06], 0.005, r), // tray latch
+        rbox(onTilted(shellC, -0.03, 0.17 * scale, r), [0.012, 0.17, 0.27], 0.01, r), // screen bezel
+        rbox([0.0, 0.635, w / 2 + 0.01], [0.46 * scale, 0.05, 0.052], 0.022),
+        rbox([0.0, 0.635, -w / 2 - 0.01], [0.46 * scale, 0.05, 0.052], 0.022),
+        rbox([-0.17, 0.53, w / 2 + 0.01], [0.05, 0.2, 0.04], 0.015),
+        rbox([-0.17, 0.53, -w / 2 - 0.01], [0.05, 0.2, 0.04], 0.015),
+        rbox([0.03, 0.385, 0], [0.46 * scale, 0.035, w - 0.04], 0.012),
+        frame(0.15, -0.18, w / 2 - 0.06, 0.37),
+        rbox([0.02, 0.27, 0], [0.24, 0.06, w * 0.7], 0.02), // life-vest pouch
+      ]),
+    screen: () => quadAft(onTilted(shellC, -0.039, 0.17 * scale, r), 0.24, 0.145, r),
+  };
+}
+
 const TEMPLATES: Record<CabinClass, SeatTemplate> = {
-  economy: {
-    fabricMat: 'seatFabric',
-    shellMat: 'plastic',
-    fabric: () =>
-      merge([
-        box([0.02, 0.45, 0], [0.46, 0.09, 0.44]),
-        box([0.2, 0.43, 0], [0.08, 0.07, 0.44], 0, -0.4), // rolled front edge
-        box([-0.22, 0.78, 0], [0.09, 0.62, 0.42], 0, recline(10)),
-        box([-0.33, 1.17, 0], [0.09, 0.17, 0.36], 0, recline(10)),
-        box([-0.32, 1.19, 0.16], [0.07, 0.15, 0.06], 0.35, recline(10)), // headrest wings
-        box([-0.32, 1.19, -0.16], [0.07, 0.15, 0.06], -0.35, recline(10)),
-      ]),
-    shell: () =>
-      merge([
-        box([-0.29, 0.86, 0], [0.04, 0.78, 0.46], 0, recline(10)), // seat-back shell
-        box([-0.3, 0.98, 0], [0.012, 0.16, 0.24], 0, recline(10)), // IFE screen bezel
-        box([-0.27, 0.72, 0], [0.02, 0.02, 0.36], 0, recline(10)), // tray-table edge
-        box([0.0, 0.62, 0.235], [0.44, 0.04, 0.05]), // armrests
-        box([0.0, 0.62, -0.235], [0.44, 0.04, 0.05]),
-        box([0.16, 0.2, 0.17], [0.05, 0.38, 0.05]), // legs
-        box([0.16, 0.2, -0.17], [0.05, 0.38, 0.05]),
-        box([-0.16, 0.2, 0.17], [0.05, 0.38, 0.05]),
-        box([-0.16, 0.2, -0.17], [0.05, 0.38, 0.05]),
-        box([0, 0.1, 0], [0.4, 0.04, 0.4]),
-      ]),
-  },
-  premium: {
-    fabricMat: 'seatFabric',
-    shellMat: 'plastic',
-    fabric: () =>
-      merge([
-        box([0.02, 0.47, 0], [0.54, 0.11, 0.5]),
-        box([-0.26, 0.84, 0], [0.11, 0.72, 0.48], 0, recline(14)),
-        box([-0.4, 1.27, 0], [0.11, 0.2, 0.4], 0, recline(14)),
-        box([0.4, 0.3, 0], [0.16, 0.06, 0.44], 0, 0.6), // leg rest
-      ]),
-    shell: () =>
-      merge([
-        box([-0.33, 0.9, 0], [0.05, 0.86, 0.54], 0, recline(14)),
-        box([-0.35, 1.02, 0], [0.012, 0.2, 0.3], 0, recline(14)),
-        box([0.02, 0.64, 0.29], [0.52, 0.06, 0.08]),
-        box([0.02, 0.64, -0.29], [0.52, 0.06, 0.08]),
-        box([0, 0.2, 0], [0.42, 0.38, 0.42]),
-      ]),
-  },
-  business: {
-    fabricMat: 'seatFabricBiz',
-    shellMat: 'cockpitPanel',
-    fabric: () =>
-      merge([
-        box([0, 0.52, 0], [1.2, 0.12, 0.58]), // seat / flat-bed surface
-        box([-0.58, 0.95, 0], [0.12, 0.8, 0.56], 0, recline(10)),
-        box([-0.66, 1.38, 0], [0.12, 0.18, 0.4], 0, recline(10)),
-      ]),
-    shell: () =>
-      merge([
-        box([0, 0.24, 0], [1.2, 0.44, 0.52]),
-        box([0.05, 0.66, 0.35], [1.35, 0.66, 0.06]), // privacy shell side
-        box([-0.68, 0.95, 0], [0.06, 0.9, 0.64], 0, recline(10)), // shell back
-        box([0.72, 0.56, 0], [0.32, 0.5, 0.6]), // ottoman / footwell
-        box([0.88, 1.02, 0], [0.04, 0.32, 0.46]), // IFE screen
-        box([0.1, 0.72, -0.34], [0.6, 0.05, 0.14]), // side console
-      ]),
-  },
-  first: {
-    fabricMat: 'seatFabricFirst',
-    shellMat: 'galley',
-    fabric: () =>
-      merge([
-        box([0, 0.52, 0], [0.92, 0.16, 0.68]),
-        box([-0.46, 1.0, 0], [0.14, 0.9, 0.7], 0, recline(8)),
-        box([-0.53, 1.48, 0], [0.12, 0.2, 0.46], 0, recline(8)),
-      ]),
-    shell: () =>
-      merge([
-        box([0, 0.24, 0], [0.9, 0.44, 0.6]),
-        box([0.25, 0.68, 0.56], [1.75, 0.95, 0.06]), // suite walls
-        box([0.25, 0.68, -0.56], [1.75, 0.95, 0.06]),
-        box([0.86, 0.56, 0], [0.46, 0.52, 0.96]), // ottoman / desk
-        box([1.0, 1.16, 0], [0.04, 0.44, 0.64]), // screen
-      ]),
-  },
+  economy: economySeat(0.46, 12),
+  premium: (() => {
+    const t = economySeat(0.52, 15, 1.08);
+    const fabric = t.fabric;
+    // calf rest under the cushion front
+    t.fabric = () => merge([fabric(), rbox([0.36, 0.3, 0], [0.06, 0.24, 0.44], 0.025, 0.55)]);
+    return t;
+  })(),
+  business: (() => {
+    const r = recline(10);
+    const back: Vec3 = [-0.56, 0.95, 0];
+    return {
+      fabricMat: 'seatFabricBiz',
+      shellMat: 'bezel',
+      fabric: () =>
+        merge([
+          rbox([0, 0.52, 0], [1.15, 0.12, 0.56], 0.05),
+          rbox(back, [0.13, 0.78, 0.54], 0.055, r, 0, 0, 0.4),
+          rbox(onTilted(back, -0.08, 0.46, r), [0.12, 0.2, 0.42], 0.06, r),
+          rbox([0.74, 0.62, 0], [0.32, 0.08, 0.5], 0.035), // ottoman cushion
+        ]),
+      shell: () =>
+        merge([
+          rbox([0, 0.24, 0], [1.2, 0.44, 0.52], 0.04),
+          rbox([0.05, 0.68, 0.36], [1.42, 0.74, 0.06], 0.03), // privacy wall
+          rbox([0.1, 1.05, 0.36], [1.42, 0.02, 0.1], 0.008), // wall cap
+          rbox(onTilted(back, -0.1, 0, r), [0.07, 0.94, 0.66], 0.035, r, 0, 0, 0.3),
+          rbox([0.74, 0.4, 0], [0.34, 0.4, 0.56], 0.04), // ottoman
+          rbox([0.1, 0.72, -0.35], [0.64, 0.06, 0.17], 0.02), // side console
+          rbox([0.89, 1.02, 0], [0.04, 0.33, 0.5], 0.015), // screen surround
+          cylinder([-0.2, 0.75, -0.39], [-0.2, 1.05, -0.39], 0.012, 10), // reading lamp
+          rbox([-0.2, 1.07, -0.36], [0.07, 0.03, 0.09], 0.012),
+        ]),
+      screen: () => quadAft([0.866, 1.02, 0], 0.44, 0.27),
+    } satisfies SeatTemplate;
+  })(),
+  first: (() => {
+    const r = recline(8);
+    const back: Vec3 = [-0.46, 1.0, 0];
+    return {
+      fabricMat: 'leather',
+      shellMat: 'bezel',
+      fabric: () =>
+        merge([
+          rbox([0, 0.52, 0], [0.92, 0.16, 0.68], 0.07),
+          rbox(back, [0.15, 0.9, 0.7], 0.07, r, 0, 0, 0.35),
+          rbox(onTilted(back, -0.08, 0.5, r), [0.13, 0.22, 0.48], 0.07, r),
+          rbox([0.05, 0.66, 0.4], [0.7, 0.12, 0.12], 0.05), // armrests
+          rbox([0.05, 0.66, -0.4], [0.7, 0.12, 0.12], 0.05),
+        ]),
+      shell: () =>
+        merge([
+          rbox([0, 0.24, 0], [0.9, 0.44, 0.6], 0.04),
+          rbox([0.25, 0.68, 0.58], [1.8, 0.96, 0.07], 0.03), // suite walls
+          rbox([0.25, 0.68, -0.58], [1.8, 0.96, 0.07], 0.03),
+          rbox([0.25, 1.17, 0.58], [1.8, 0.025, 0.11], 0.01),
+          rbox([0.25, 1.17, -0.58], [1.8, 0.025, 0.11], 0.01),
+          rbox([0.88, 0.56, 0], [0.46, 0.52, 0.98], 0.04), // ottoman / desk
+          rbox([1.03, 1.16, 0], [0.04, 0.46, 0.68], 0.015),
+        ]),
+      screen: () => quadAft([1.007, 1.16, 0], 0.6, 0.36),
+    } satisfies SeatTemplate;
+  })(),
 };
 
-function seatInstances(cls: CabinClass, seats: SeatRecord[], part: 'fabric' | 'shell'): InstancedMesh {
+function seatInstances(cls: CabinClass, seats: SeatRecord[], part: 'fabric' | 'shell' | 'screen'): InstancedMesh {
   const list = seats.filter((s) => s.cls === cls);
   const t = TEMPLATES[cls];
-  const im = new InstancedMesh(t[part](), mat(part === 'fabric' ? t.fabricMat : t.shellMat), list.length);
+  const key: MaterialKey = part === 'fabric' ? t.fabricMat : part === 'shell' ? t.shellMat : 'ifeScreen';
+  const im = new InstancedMesh(t[part](), mat(key), list.length);
   im.name = `seats_${cls}_${part}`;
   im.userData.partId = 'seats';
   const m = new Matrix4();
@@ -264,28 +297,125 @@ function endWall(deck: keyof typeof DECKS, s: number): BufferGeometry {
   });
 }
 
-/** Overhead stowage bins: a rounded box section extruded along the cabin. */
-function bins(s0: number, s1: number, zCentre: number, w: number, h: number, yTop: number): BufferGeometry {
-  return box([sx((s0 + s1) / 2), yTop - h / 2, zCentre], [s1 - s0, h, w]);
+/** Flip a geometry whose average normal points away from `dir`. */
+function facing(g: BufferGeometry, dir: Vec3): BufferGeometry {
+  const n = g.getAttribute('normal');
+  let d = 0;
+  for (let i = 0; i < n.count; i++) d += n.getX(i) * dir[0] + n.getY(i) * dir[1] + n.getZ(i) * dir[2];
+  return d < 0 ? flipGeometry(g) : g;
 }
 
-/** Window reveals seen from inside: emissive daylight panes on the lining. */
-function innerWindows(deck: keyof typeof DECKS): BufferGeometry {
+/**
+ * Overhead bin run: a lofted moulding with a convex door face, closed ends, door seams and
+ * latch handles. `side` is +1 for starboard bins (door facing −Z, towards the aisle).
+ */
+function binRun(s0: number, s1: number, zOut: number, w: number, h: number, yTop: number, side: 1 | -1): { body: BufferGeometry; trim: BufferGeometry } {
+  // profile in (inward distance from the outboard wall, height), outboard top → door → top
+  const prof: [number, number][] = [
+    [0, 0],
+    [0, -h * 0.82],
+    [0.07, -h],
+    [w - 0.07, -h],
+    [w - 0.01, -h + 0.06],
+    [w + 0.025, -h * 0.55],
+    [w + 0.015, -h * 0.18],
+    [w - 0.05, 0],
+  ];
+  const n = Math.max(2, Math.ceil((s1 - s0) / 0.5));
+  const P = (s: number, k: number): Vec3 => {
+    const [dz, dy] = prof[Math.min(k, prof.length - 1)]!;
+    return [sx(s), yTop + dy, side * (zOut - dz)];
+  };
+  const body = facing(
+    gridSurface(n, prof.length - 1, (i, j) => P(lerp(s0, s1, i / n), j)),
+    [0, -0.3, -side],
+  );
+  const cap = (s: number) => {
+    const g = new BufferGeometry();
+    const pts = prof.map((_, k) => P(s, k));
+    const c = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length, a[2] + p[2] / pts.length] as Vec3, [0, 0, 0] as Vec3);
+    const pos = [...c, ...pts.flat()];
+    const idx: number[] = [];
+    for (let k = 0; k < pts.length - 1; k++) idx.push(0, k + 1, k + 2);
+    g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('uv', new BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return facing(g, [s === s0 ? 1 : -1, 0, 0]);
+  };
+  // door seams and latches along the door face
+  const trim: BufferGeometry[] = [];
+  const doorZ = side * (zOut - w - 0.026);
+  for (let s = s0 + 1.55; s < s1 - 0.4; s += 1.55) trim.push(box([sx(s), yTop - h * 0.5, doorZ], [0.008, h * 0.86, 0.012]));
+  for (let s = s0 + 0.78; s < s1 - 0.4; s += 1.55) trim.push(rbox([sx(s), yTop - h * 0.24, doorZ - side * 0.006], [0.16, 0.035, 0.02], 0.008));
+  return { body: merge([body, cap(s0), cap(s1)]), trim: merge(trim) };
+}
+
+/**
+ * Window reveals seen from the cabin: a moulded bezel standing slightly proud of the lining,
+ * a recessed daylight pane, and a pull-down shade left at a different height in each window.
+ */
+function windowReveals(deck: keyof typeof DECKS): { bezel: BufferGeometry; pane: BufferGeometry; shade: BufferGeometry } {
   const d = DECKS[deck];
-  const parts: BufferGeometry[] = [];
+  const bezel: BufferGeometry[] = [];
+  const pane: BufferGeometry[] = [];
+  const shade: BufferGeometry[] = [];
   const avoid = (deck === 'main' ? DOORS.main : DOORS.upper).map((x) => x.s);
+  const outer = resample(roundedRect(0.34, 0.5, 0.15, 6), 40);
+  const inner = resample(roundedRect(0.27, 0.41, 0.12, 6), 40);
+  const opening = resample(roundedRect(0.245, 0.375, 0.11, 6), 40);
+  let seed = 3;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let s = d.s0 + 0.4; s < d.s1 - 0.4; s += 0.533) {
     if (avoid.some((a) => Math.abs(a - s) < 1.0)) continue;
     for (const side of [1, -1] as const) {
       const th = thetaAtHeight(s, d.win, side);
-      const p = fuselagePoint(s, th, -0.165);
-      const n = fuselagePoint(s, th, 0);
-      const out: Vec3 = [n[0] - p[0], n[1] - p[1], n[2] - p[2]];
-      const g = box([p[0], p[1], p[2] - side * 0.006], [0.25, 0.36, 0.01], 0, 0, Math.atan2(out[1], Math.abs(out[2])) * -side);
-      parts.push(g);
+      const o = fuselagePoint(s, th, -0.16);
+      const nOut = fuselageNormal(s, th);
+      const nIn: Vec3 = [-nOut[0], -nOut[1], -nOut[2]];
+      // local frame: u along the fuselage axis, v up the wall (perpendicular to the normal), depth towards the aisle
+      const vy = Math.abs(nOut[2]);
+      const vz = -nOut[1] * Math.sign(nOut[2] || side);
+      const vl = Math.hypot(vy, vz) || 1;
+      const V: Vec3 = [0, vy / vl, vz / vl];
+      const at = (u: number, v: number, depth: number): Vec3 => [o[0] + u, o[1] + V[1] * v + nIn[1] * depth, o[2] + V[2] * v + nIn[2] * depth];
+      const loop = (a: [number, number][], da: number, b: [number, number][], db: number) =>
+        facing(
+          gridSurface(a.length - 1, 1, (i, j) => (j === 0 ? at(a[i]![0], a[i]![1], da) : at(b[i]![0], b[i]![1], db))),
+          nIn,
+        );
+      bezel.push(loop(outer, 0.002, inner, 0.03), loop(inner, 0.03, opening, 0.011));
+      const fan = new BufferGeometry();
+      const pts = opening.map(([u, v]) => at(u, v, 0.011));
+      const c = at(0, 0, 0.011);
+      fan.setAttribute('position', new BufferAttribute(new Float32Array([...c, ...pts.flat()]), 3));
+      fan.setAttribute('uv', new BufferAttribute(new Float32Array((pts.length + 1) * 2), 2));
+      fan.setIndex(pts.slice(0, -1).flatMap((_, k) => [0, k + 1, k + 2]));
+      fan.computeVertexNormals();
+      pane.push(facing(fan, nIn));
+      // shade: drawn down from the top of the opening to a random height
+      const drop = rnd() < 0.55 ? 0.02 : 0.08 + rnd() * 0.3;
+      const top = 0.19;
+      const sh = new BufferGeometry();
+      const q = [at(-0.125, top, 0.015), at(0.125, top, 0.015), at(0.125, top - drop, 0.015), at(-0.125, top - drop, 0.015)];
+      sh.setAttribute('position', new BufferAttribute(new Float32Array(q.flat()), 3));
+      sh.setAttribute('uv', new BufferAttribute(new Float32Array(8), 2));
+      sh.setIndex([0, 1, 2, 0, 2, 3]);
+      sh.computeVertexNormals();
+      shade.push(facing(sh, nIn));
     }
   }
-  return merge(parts);
+  return { bezel: merge(bezel), pane: merge(pane), shade: merge(shade) };
+}
+
+/** Passenger service units under the side bins: a continuous panel with reading lights. */
+function serviceUnits(s0: number, s1: number, zIn: number, y: number, side: 1 | -1, pitch: number): { panel: BufferGeometry; lights: BufferGeometry } {
+  const panel = rbox([sx((s0 + s1) / 2), y, side * (zIn + 0.12)], [s1 - s0, 0.025, 0.26], 0.01);
+  const lights: BufferGeometry[] = [];
+  for (let s = s0 + pitch / 2; s < s1; s += pitch) {
+    for (const dz of [0.05, 0.13]) lights.push(cylinder([sx(s), y - 0.012, side * (zIn + dz)], [sx(s), y - 0.016, side * (zIn + dz)], 0.017, 10));
+  }
+  return { panel, lights: merge(lights) };
 }
 
 function monument(sFrom: number, sTo: number, deck: keyof typeof DECKS, zFrom: number, zTo: number, h = 2.0): BufferGeometry {
@@ -318,12 +448,15 @@ function ceilingLights(deck: keyof typeof DECKS): BufferGeometry {
   return merge(parts);
 }
 
-export function buildCabin(): Group {
+/** `quality` < 1 builds the lighter cabin used on phones (single-segment rounding). */
+export function buildCabin(quality = 1): Group {
+  setRoundingDetail(quality);
   const g = group('cabin', [], 'cabin');
   const seats = seatMap();
   for (const cls of ['first', 'business', 'premium', 'economy'] as CabinClass[]) {
     g.add(seatInstances(cls, seats, 'fabric'));
     g.add(seatInstances(cls, seats, 'shell'));
+    g.add(seatInstances(cls, seats, 'screen'));
   }
   g.userData.seatMap = seats.map((s) => [s.id, s.deck, s.cls, s.row, s.letter, +s.s.toFixed(3), s.z, s.window ? 1 : 0, s.facing]);
 
@@ -332,17 +465,38 @@ export function buildCabin(): Group {
     g.add(mesh(`lining_${deck}`, lining(deck), 'cabinWall', 'cabinInterior'));
     g.add(mesh(`floor_${deck}`, floorPanel(deck), 'carpet', 'cabinInterior'));
     g.add(mesh(`endwalls_${deck}`, merge([endWall(deck, d.s0), endWall(deck, d.s1)]), 'cabinWall', 'cabinInterior'));
-    g.add(mesh(`windows_inner_${deck}`, innerWindows(deck), 'emissiveCabin', 'cabinInterior'));
+    const wr = windowReveals(deck);
+    g.add(mesh(`window_bezels_${deck}`, wr.bezel, 'bezel', 'cabinInterior'));
+    g.add(mesh(`windows_inner_${deck}`, wr.pane, 'emissiveCabin', 'cabinInterior'));
+    g.add(mesh(`window_shades_${deck}`, wr.shade, 'plastic', 'cabinInterior'));
     g.add(mesh(`ceiling_lights_${deck}`, ceilingLights(deck), 'emissiveCabin', 'cabinInterior'));
   }
-  // Overhead bins
-  const binGeo: BufferGeometry[] = [];
-  for (const sgn of [1, -1]) {
-    binGeo.push(bins(22, 59.5, sgn * 2.45, 0.62, 0.45, DECKS.main.ceil - 0.05));
-    binGeo.push(bins(18, 50, sgn * 2.05, 0.55, 0.38, DECKS.upper.ceil - 0.15));
+  // Overhead bins with service units underneath and concealed cove lighting above
+  const binBody: BufferGeometry[] = [];
+  const binTrim: BufferGeometry[] = [];
+  const psu: BufferGeometry[] = [];
+  const psuLights: BufferGeometry[] = [];
+  const cove: BufferGeometry[] = [];
+  for (const side of [1, -1] as const) {
+    for (const [s0, s1, zOut, w, h, yTop, deck] of [
+      [22, 59.5, 2.76, 0.62, 0.45, DECKS.main.ceil - 0.05, 'main'],
+      [18, 50, 2.33, 0.55, 0.38, DECKS.upper.ceil - 0.15, 'upper'],
+    ] as const) {
+      const b = binRun(s0, s1, zOut, w, h, yTop, side);
+      binBody.push(b.body);
+      binTrim.push(b.trim);
+      const u = serviceUnits(s0, s1, zOut - w - 0.3, yTop - h - 0.03, side, deck === 'main' ? 0.79 : 0.97);
+      psu.push(u.panel);
+      psuLights.push(u.lights);
+      cove.push(box([sx((s0 + s1) / 2), yTop + 0.015, side * (zOut - w + 0.06)], [s1 - s0, 0.012, 0.05]));
+    }
   }
-  binGeo.push(bins(32, 59.5, 0, 1.4, 0.42, DECKS.main.ceil - 0.02));
-  g.add(mesh('overhead_bins', merge(binGeo), 'plastic', 'cabinInterior'));
+  binBody.push(rbox([sx((32 + 59.5) / 2), DECKS.main.ceil - 0.23, 0], [59.5 - 32, 0.42, 1.4], 0.08));
+  g.add(mesh('overhead_bins', merge(binBody), 'plastic', 'cabinInterior'));
+  g.add(mesh('overhead_bin_trim', merge(binTrim), 'bezel', 'cabinInterior'));
+  g.add(mesh('service_units', merge(psu), 'bezel', 'cabinInterior'));
+  g.add(mesh('ceiling_lights_reading', merge(psuLights), 'emissiveCabin', 'cabinInterior'));
+  g.add(mesh('ceiling_lights_cove', merge(cove), 'emissiveCabin', 'cabinInterior'));
 
   // Galleys and lavatories at door zones (illustrative)
   const galleys = merge([
@@ -381,6 +535,7 @@ export function buildCabin(): Group {
   // Staircases: forward (between M1 and M2 zone) and aft
   g.add(mesh('stairs_forward', stairs(8.9, 1, 0), 'galley', 'stairs'));
   g.add(mesh('stairs_aft', stairs(59.9, -1, 0), 'galley', 'stairs'));
+  setRoundingDetail(1);
   return g;
 }
 

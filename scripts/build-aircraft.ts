@@ -1,11 +1,13 @@
 /**
  * Asset pipeline: generates the procedural A380 geometry and writes optimised, independently
  * loadable GLB files (meshopt-compressed, quantised) plus a manifest with sizes and triangle
- * counts. Two LODs are produced: `hi` (quality 1.0) and `lo` (quality 0.5).
+ * counts. Three LODs are produced: `ultra` (quality 2.4), `hi` (1.0) and `lo` (0.5). Every vertex
+ * carries ray-traced ambient occlusion (see bake-ao.ts). Unchanged sources skip the rebuild.
  *
  *   npm run assets
  */
-import { mkdirSync, writeFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document, Logger, NodeIO, type Node as GNode } from '@gltf-transform/core';
@@ -17,6 +19,7 @@ import { ASSETS, buildAsset, type AssetName } from '../src/aircraft/geometry/air
 import { buildCabin } from '../src/aircraft/geometry/cabin';
 import { buildCockpit } from '../src/aircraft/geometry/cockpit';
 import { buildStructure } from '../src/aircraft/geometry/structure';
+import { bakeAO } from './bake-ao';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'models', 'generated');
@@ -84,6 +87,12 @@ function exportGroup(group: Object3D, file: string): { tris: number; meshes: num
         if (!a) continue;
         prim.setAttribute(gl, doc.createAccessor().setType(a.itemSize === 3 ? 'VEC3' : 'VEC2').setArray(new Float32Array(a.array as Float32Array)).setBuffer(buffer));
       }
+      const ao = geo.getAttribute('_ao');
+      if (ao) {
+        const q = new Uint8Array(ao.count);
+        for (let i = 0; i < ao.count; i++) q[i] = Math.round(Math.min(1, Math.max(0, ao.getX(i))) * 255);
+        prim.setAttribute('_AO', doc.createAccessor().setType('SCALAR').setArray(q).setNormalized(true).setBuffer(buffer));
+      }
       const idx = geo.getIndex();
       if (idx) {
         const count = geo.getAttribute('position').count;
@@ -141,36 +150,87 @@ function exportGroup(group: Object3D, file: string): { tris: number; meshes: num
 
 const pending: Promise<void>[] = [];
 
+/** Hash of everything that shapes the generated assets; unchanged sources skip the (slow) rebuild. */
+function sourceHash(): string {
+  const h = createHash('sha256');
+  const files = [
+    ...readdirSync(join(root, 'src/aircraft/geometry'))
+      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+      .map((f) => join(root, 'src/aircraft/geometry', f)),
+    join(root, 'scripts/build-aircraft.ts'),
+    join(root, 'scripts/bake-ao.ts'),
+  ].sort();
+  for (const f of files) h.update(readFileSync(f));
+  return h.digest('hex').slice(0, 16);
+}
+
+/**
+ * Level-of-detail tiers: geometric density factor and AO ray count. The ultra tier is
+ * occluded by the hi geometry, which gives the same occlusion at a third of the cost.
+ */
+const LODS = [
+  { lod: 'hi', quality: 1, rays: 32 },
+  { lod: 'ultra', quality: 2.4, rays: 24 },
+  { lod: 'lo', quality: 0.5, rays: 32 },
+] as const;
+
 async function main() {
   await MeshoptEncoder.ready;
   const t0 = performance.now();
-  const manifest: { assets: Record<string, { lod: string; file: string; bytes: number; triangles: number; meshes: number }[]>; generated: string } = {
+  const hash = sourceHash();
+  const manifestPath = join(outDir, 'manifest.json');
+  if (!process.argv.includes('--force') && existsSync(manifestPath)) {
+    try {
+      const prev = JSON.parse(readFileSync(manifestPath, 'utf8')) as { source?: string; assets: Record<string, { file: string }[]> };
+      const files = Object.values(prev.assets).flat();
+      if (prev.source === hash && files.every((f) => existsSync(join(outDir, f.file)))) {
+        console.log(`assets up to date (${hash}); pass --force to rebuild`);
+        return;
+      }
+    } catch {
+      /* rebuild */
+    }
+  }
+  const manifest: { assets: Record<string, { lod: string; file: string; bytes: number; triangles: number; meshes: number }[]>; generated: string; source: string } = {
     assets: {},
     generated: new Date().toISOString(),
+    source: hash,
   };
-  const jobs: { name: string; lod: string; build: () => Object3D }[] = [];
-  for (const name of ASSETS) {
-    jobs.push({ name, lod: 'hi', build: () => buildAsset(name as AssetName, 1) });
-    jobs.push({ name, lod: 'lo', build: () => buildAsset(name as AssetName, 0.5) });
-  }
-  jobs.push({ name: 'structure', lod: 'hi', build: () => buildStructure() });
-  jobs.push({ name: 'cabin', lod: 'hi', build: () => buildCabin() });
-  jobs.push({ name: 'cockpit', lod: 'hi', build: () => buildCockpit() });
-
   const stats: { name: string; lod: string; file: string; tris: number; meshes: number }[] = [];
-  for (const j of jobs) {
-    const g = j.build();
-    const file = `${j.name}-${j.lod}.glb`;
-    const s = exportGroup(g, file);
-    stats.push({ name: j.name, lod: j.lod, file, ...s });
+  const emit = (name: string, lod: string, g: Object3D) => {
+    const file = `${name}-${lod}.glb`;
+    stats.push({ name, lod, file, ...exportGroup(g, file) });
+  };
+
+  // Exterior: all assets of a tier occlude each other (wing over fuselage, pylons, gear bays)
+  let hiGroups: Object3D[] | null = null;
+  for (const t of LODS) {
+    const groups = ASSETS.map((a) => buildAsset(a as AssetName, t.quality));
+    if (t.lod === 'hi') hiGroups = groups;
+    const r = bakeAO(groups, t.lod === 'ultra' && hiGroups ? hiGroups : groups, { rays: t.rays, distance: 3, bias: 0.012 });
+    console.log(`AO ${t.lod}: ${r.vertices} vertices, ${(r.rays / 1e6).toFixed(1)} M rays, ${(r.ms / 1000).toFixed(1)} s`);
+    ASSETS.forEach((a, i) => emit(a, t.lod, groups[i]!));
   }
+  // Interiors bake against themselves, at a short range
+  for (const [name, lod, build, dist] of [
+    ['structure', 'hi', buildStructure, 1.5],
+    ['cabin', 'hi', () => buildCabin(1), 1.6],
+    ['cabin', 'lo', () => buildCabin(0.5), 1.6],
+    ['cockpit', 'hi', buildCockpit, 0.9],
+  ] as const) {
+    const g = build();
+    const r = bakeAO([g], [g], { rays: 32, distance: dist, bias: 0.004 });
+    console.log(`AO ${name}-${lod}: ${r.vertices} vertices, ${(r.rays / 1e6).toFixed(1)} M rays, ${(r.ms / 1000).toFixed(1)} s`);
+    emit(name, lod, g);
+  }
+
   await Promise.all(pending);
   for (const s of stats) {
     const bytes = statSync(join(outDir, s.file)).size;
     (manifest.assets[s.name] ??= []).push({ lod: s.lod, file: s.file, bytes, triangles: s.tris, meshes: s.meshes });
     console.log(`${s.file.padEnd(22)} ${(bytes / 1024).toFixed(0).padStart(6)} KiB  ${String(s.tris).padStart(8)} tris  ${s.meshes} meshes`);
   }
-  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   console.log(`done in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
 }
 

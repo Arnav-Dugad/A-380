@@ -51,10 +51,19 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
 - **Floating origin in flight.** The aircraft stays near the render origin and the world
   moves around it, which keeps rendering precise at any distance from the airport.
 - **Progressive, lazy loading.**
-  1. Low-detail exterior LOD (about 1.05 MB, 375 kB gzipped).
-  2. High-detail exterior LOD.
+  1. Low-detail exterior (`lo`, about 200k triangles, 0.48 MB gzipped).
+  2. The tier the quality preset asks for: `hi` (346k triangles) on Balanced, or `ultra`
+     (1.05M triangles, 1.4 MB gzipped) on High and Ultra.
   3. Structure, cabin and cockpit GLBs, fetched only when X-ray, the cabin or the cockpit is
-     opened.
+     opened. Phones get a lighter cabin.
+- **Baked ambient occlusion.** `scripts/bake-ao.ts` ray-traces per-vertex occlusion at build
+  time with a BVH: 24–32 cosine-weighted rays per vertex, about 35 million rays in all. It is
+  stored as a `_AO` vertex attribute. `src/aircraft/bakedAO.ts` patches the PBR shaders so
+  that occlusion dims indirect light (sky, environment reflections) and only slightly dims
+  direct light.
+- **Image-based lighting.** Each environment uses a CC0 HDR panorama for lighting and
+  reflections. The panorama is rotated so its sun agrees with the shadow-casting light. A
+  probe disc adds concrete below the horizon where the panorama has none.
 
 - **Panel-aware framing.** Interface panels report the screen area they cover
   (`src/camera/viewInset.ts`). The camera's view offset moves the principal point to the
@@ -68,9 +77,9 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
 
 | Preset | DPR | Shadows | AO | Post | Geometry |
 |---|---|---|---|---|---|
-| Ultra | 1–2 | 4096² | N8AO high | Bloom, SMAA, vignette, reflective studio floor | Hi LOD |
-| High | 1–1.75 | 2048² | N8AO medium, half res | Bloom, SMAA, vignette, reflective floor | Hi LOD |
+| Ultra | 1–2 | 4096² | N8AO high | Bloom, SMAA, vignette, reflective studio floor | Ultra LOD, 512² env probe |
+| High | 1–1.75 | 2048² | N8AO medium, half res | Bloom, SMAA, vignette, reflective floor | Ultra LOD, 512² env probe |
 | Balanced | 0.85–1.25 | 1024² | — | Bloom, SMAA | Hi LOD |
-| Performance | 0.6–1 | Contact shadows only | — | None (renderer tone mapping) | Lo LOD |
+| Performance | 0.6–1 | Contact shadows only | — | None (renderer tone mapping) | Lo LOD, light cabin |
 
 The drei `PerformanceMonitor` steps Ultra down to High when the frame rate drops.

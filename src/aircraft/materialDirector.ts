@@ -9,6 +9,7 @@ import { Color, DoubleSide, Mesh, MeshStandardMaterial, type Material } from 'th
 import { PARTS } from '../data/parts';
 import type { SystemLayer } from '../state/ui';
 import type { AircraftRig } from './rig';
+import { withBakedAO } from './bakedAO';
 
 const ICE = new Color('#6fd3ef');
 const cache = new Map<string, Material>();
@@ -20,7 +21,7 @@ function variant(base: Material, mode: string, make: (m: MeshStandardMaterial) =
   const key = `${base.uuid}:${mode}`;
   let v = cache.get(key);
   if (!v) {
-    v = base.clone();
+    v = withBakedAO(base.clone());
     v.clippingPlanes = base.clippingPlanes; // keep sharing the live section planes
     if (v instanceof MeshStandardMaterial) make(v);
     cache.set(key, v);

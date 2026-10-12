@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { BoxGeometry, CanvasTexture, Color, InstancedMesh, LinearSRGBColorSpace, Matrix4, MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace, Quaternion, Vector3, type BufferGeometry, type Texture } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildGse } from './gse';
 import { APRON, RWY, STAND, TERMINAL, TOWER, TWY_CONNECTORS, TWY_Z } from './layout';
 
 function noiseTex(base: [number, number, number], amp: number, size = 512, streaks = false): Texture {
@@ -182,46 +183,6 @@ function jetBridges(): BufferGeometry {
   return mergeGeometries(parts);
 }
 
-/** Ground support equipment around the stand (right side: cargo; left/front: services). */
-function gse(): { bodies: BufferGeometry; wheels: BufferGeometry } {
-  const bodies: BufferGeometry[] = [];
-  const wheels: BufferGeometry[] = [];
-  const veh = (x: number, z: number, w: number, h: number, d: number, rot = 0, cab = true) => {
-    const parts = [box(0, 0.6, 0, w, h, d)];
-    if (cab) parts.push(box(w / 2 - 0.9, 0.6 + h, 0, 1.8, 1.4, d * 0.9));
-    const g = mergeGeometries(parts.map((p) => p.toNonIndexed()));
-    g.rotateY(rot);
-    g.translate(x, 0, z);
-    bodies.push(g);
-    for (const [dx, dz] of [
-      [-w / 2 + 0.8, -d / 2],
-      [w / 2 - 0.8, -d / 2],
-      [-w / 2 + 0.8, d / 2],
-      [w / 2 - 0.8, d / 2],
-    ] as [number, number][]) {
-      const wg = new BoxGeometry(0.9, 0.9, 0.35);
-      wg.translate(dx, 0.45, dz);
-      wg.rotateY(rot);
-      wg.translate(x, 0, z);
-      wheels.push(wg.toNonIndexed());
-    }
-  };
-  const zs = (s: number) => STAND.z - (36.0 - s);
-  // Belt loader & ULD dollies at forward and aft cargo doors (right side = east)
-  veh(STAND.x + 9, zs(16.6), 8, 1.2, 2.4, -0.5);
-  veh(STAND.x + 9, zs(51), 8, 1.2, 2.4, 0.5);
-  for (let k = 0; k < 4; k++) veh(STAND.x + 16 + k * 0.2, zs(12 + k * 3.4), 3.2, 0.6, 2.2, 0, false);
-  // Catering high-loader (right side, M2R)
-  veh(STAND.x + 7, zs(20), 7, 3.6, 2.6, 0);
-  // Fuel truck under the right wing
-  veh(STAND.x + 20, zs(36), 11, 2.6, 2.6, 0);
-  // Push-back tug in front of the nose
-  veh(STAND.x, zs(-6), 5.5, 1.4, 3.2, Math.PI / 2, false);
-  // GPU near the nose
-  veh(STAND.x + 5, zs(4), 3, 1.6, 1.8, 0, false);
-  return { bodies: mergeGeometries(bodies.map((b) => (b.index ? b.toNonIndexed() : b))), wheels: mergeGeometries(wheels) };
-}
-
 /** Instanced airfield lights: runway edge (white), centreline, thresholds (green/red), taxiway edges (blue). */
 function lightInstances(): { pos: Vector3; color: Color }[] {
   const out: { pos: Vector3; color: Color }[] = [];
@@ -255,7 +216,7 @@ export function Airport({ night }: { night: boolean }) {
     concrete.repeat.set(18, 6);
     const tw = taxiwayGeometry();
     const term = terminal();
-    const g = gse();
+    const g = buildGse();
     const lights = lightInstances();
     const lightGeo = new BoxGeometry(0.5, 0.25, 0.5);
     const lightMat = new MeshStandardMaterial({ color: '#111', emissive: '#ffffff', emissiveIntensity: 3, toneMapped: false });
@@ -322,11 +283,24 @@ export function Airport({ night }: { night: boolean }) {
       <mesh geometry={data.bridges} castShadow receiveShadow>
         <meshStandardMaterial color="#b9c0c6" roughness={0.45} metalness={0.5} />
       </mesh>
-      <mesh geometry={data.g.bodies} castShadow receiveShadow>
-        <meshStandardMaterial color="#dfe3e6" roughness={0.45} metalness={0.1} />
+      {/* Ground support equipment, one draw call per material */}
+      <mesh geometry={data.g.body} castShadow receiveShadow>
+        <meshPhysicalMaterial color="#eef0f2" roughness={0.32} clearcoat={0.6} clearcoatRoughness={0.2} />
       </mesh>
-      <mesh geometry={data.g.wheels}>
-        <meshStandardMaterial color="#1a1b1d" roughness={0.9} />
+      <mesh geometry={data.g.hivis} castShadow receiveShadow>
+        <meshPhysicalMaterial color="#f2b705" roughness={0.38} clearcoat={0.5} clearcoatRoughness={0.25} />
+      </mesh>
+      <mesh geometry={data.g.chassis} castShadow receiveShadow>
+        <meshStandardMaterial color="#2b2e33" roughness={0.6} metalness={0.4} />
+      </mesh>
+      <mesh geometry={data.g.glass}>
+        <meshPhysicalMaterial color="#0d1418" roughness={0.05} clearcoat={1} envMapIntensity={1.6} />
+      </mesh>
+      <mesh geometry={data.g.rubber} castShadow>
+        <meshStandardMaterial color="#17181a" roughness={0.85} />
+      </mesh>
+      <mesh geometry={data.g.alu} castShadow receiveShadow>
+        <meshStandardMaterial color="#c5c9ce" roughness={0.35} metalness={1} />
       </mesh>
       <primitive object={data.lm} />
     </group>

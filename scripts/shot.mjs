@@ -27,7 +27,7 @@ for (const v of views) {
     if (v.pos) await window.__a380.camera(v.pos, v.target, false);
   }, v);
   await page.waitForTimeout(v.wait ?? 1200);
-  await page.screenshot({ path: `${outPrefix}-${v.name}.png` });
+  await page.screenshot({ path: `${outPrefix}-${v.name}.png`, timeout: 300000 });
 }
 console.log(logs.slice(0, 30).join('\n'));
 await browser.close();

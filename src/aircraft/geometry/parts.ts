@@ -13,7 +13,9 @@ export type MaterialKey =
   | 'composite' // fairings, control-surface composite
   | 'leadingEdge' // bare aluminium leading edges / inlet lips
   | 'metal' // brushed metal
-  | 'darkMetal' // gear structure
+  | 'darkMetal' // axles, actuators, brackets
+  | 'gearPaint' // painted landing-gear structure (light grey)
+  | 'inletLip' // polished aluminium engine inlet lip
   | 'chrome' // shock-absorber sliding tubes
   | 'tyre'
   | 'hub'
@@ -33,6 +35,9 @@ export type MaterialKey =
   | 'seatFabric'
   | 'seatFabricBiz'
   | 'seatFabricFirst'
+  | 'leather'
+  | 'ifeScreen' // seat-back entertainment screens
+  | 'bezel' // window reveals and trim (moulded plastic)
   | 'plastic'
   | 'galley'
   | 'cockpitPanel'

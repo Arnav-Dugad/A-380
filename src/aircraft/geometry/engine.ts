@@ -102,7 +102,7 @@ export function buildEngine(frame: EngineFrame, quality: number): Group {
 
   // Inlet lip (polished) and fan cowl (painted) form one closed loop split by material.
   const lip: Prof = [...LIP, [-0.62, 1.49]];
-  root.add(mesh(`${id}_inlet`, latheLoop(lip, seg), 'leadingEdge', 'engineInlet'));
+  root.add(mesh(`${id}_inlet`, latheLoop(lip, seg), 'inletLip', 'engineInlet'));
   const cowl: Prof = [
     [SLEEVE_X, 1.875],
     [-3.2, 1.86],

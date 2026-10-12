@@ -6,7 +6,7 @@
  */
 import { Environment, Lightformer, MeshReflectorMaterial, Sky, Stars } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import {
   CanvasTexture,
   Color,
@@ -47,10 +47,31 @@ export interface EnvLook {
 const LOOKS: Record<EnvPreset, EnvLook> = {
   studio: { sunElevation: 55, sunAzimuth: 135, sunIntensity: 2.2, sunColor: '#ffffff', hemiSky: '#c8d6e5', hemiGround: '#1a1e24', hemiIntensity: 0.25, fog: '#0d1014', exposure: 1.0, outdoor: false, night: false },
   apron: { sunElevation: 52, sunAzimuth: 210, sunIntensity: 3.0, sunColor: '#fff6e8', hemiSky: '#b9d3f0', hemiGround: '#6b6a62', hemiIntensity: 0.55, fog: '#c9d8e6', exposure: 0.82, outdoor: true, night: false },
-  golden: { sunElevation: 5, sunAzimuth: 268, sunIntensity: 3.4, sunColor: '#ffb36b', hemiSky: '#ffc999', hemiGround: '#3d3026', hemiIntensity: 0.45, fog: '#e7b48a', exposure: 1.05, outdoor: true, night: false },
+  golden: { sunElevation: 8, sunAzimuth: 268, sunIntensity: 3.4, sunColor: '#ffb36b', hemiSky: '#ffc999', hemiGround: '#3d3026', hemiIntensity: 0.45, fog: '#e7b48a', exposure: 1.05, outdoor: true, night: false },
   hangar: { sunElevation: -4, sunAzimuth: 280, sunIntensity: 0.0, sunColor: '#9fbaff', hemiSky: '#9fb6d9', hemiGround: '#2b3038', hemiIntensity: 0.35, fog: '#1b2433', exposure: 1.0, outdoor: false, night: false },
   night: { sunElevation: 38, sunAzimuth: 150, sunIntensity: 0.25, sunColor: '#9fb3ff', hemiSky: '#1b2a44', hemiGround: '#0b0d10', hemiIntensity: 0.18, fog: '#070b12', exposure: 0.9, outdoor: true, night: true },
 };
+
+/**
+ * Image-based lighting: CC0 HDR panoramas (Poly Haven, via the three.js examples and
+ * @pmndrs/assets) light and reflect on the aircraft. `sunU` is the horizontal texture
+ * coordinate of the sun in the panorama; the panorama is rotated so it agrees with the
+ * shadow-casting sun. `ground` paints a concrete disc into the probe below the horizon.
+ */
+interface Hdri {
+  file: string;
+  intensity: number;
+  sunU?: number;
+  ground?: string;
+}
+const HDRI: Partial<Record<EnvPreset | 'interior', Hdri>> = {
+  apron: { file: 'sky.exr', intensity: 0.9, sunU: 0.594, ground: '#77756f' },
+  golden: { file: 'blouberg_sunrise_2_1k.hdr', intensity: 1.0, sunU: 0.056 },
+  night: { file: 'moonless_golf_1k.hdr', intensity: 1.6 },
+  hangar: { file: 'warehouse.exr', intensity: 0.7 },
+  interior: { file: 'warehouse.exr', intensity: 0.6 },
+};
+const HDRI_BASE = `${import.meta.env.BASE_URL}hdri/`;
 
 const WEATHER: Record<Weather, { fogFar: number; sunK: number; cloud: number; rain: number; wind: number; gust: number; turb: number; grey: number }> = {
   clear: { fogFar: 26000, sunK: 1, cloud: 0.15, rain: 0, wind: 6, gust: 0, turb: 0.05, grey: 0 },
@@ -124,7 +145,8 @@ function grassTexture(): CanvasTexture {
 function Ground({ wet }: { wet: number }) {
   const ref = useRef<Mesh>(null);
   const mat = useMemo(() => {
-    const m = new MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, color: '#a6b28f', polygonOffset: true, polygonOffsetFactor: 6, polygonOffsetUnits: 6 });
+    // Drawn first without writing depth: paved surfaces always cover it, whatever the depth precision at grazing angles
+    const m = new MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, color: '#a6b28f', depthWrite: false });
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uGround = { value: new Vector3() };
       m.userData.shader = sh;
@@ -154,7 +176,7 @@ function Ground({ wet }: { wet: number }) {
     if (sh) sh.uniforms.uGround.value.copy(m.position);
     mat.roughness = 0.95 - wet * 0.5;
   });
-  return <mesh ref={ref} geometry={geo} material={mat} receiveShadow />;
+  return <mesh ref={ref} geometry={geo} material={mat} receiveShadow renderOrder={-10} />;
 }
 
 // ------------------------------------------------------------------ rain
@@ -253,7 +275,31 @@ function Clouds({ cover, night }: { cover: number; night: boolean }) {
 }
 
 // ------------------------------------------------------------------ studio & hangar sets
+/** Large-scale mottling for the studio floor's roughness. */
+function floorRoughness(): CanvasTexture {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#9a9a9a';
+  ctx.fillRect(0, 0, size, size);
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 420; i++) {
+    const v = 120 + rnd() * 110;
+    ctx.fillStyle = `rgba(${v},${v},${v},0.08)`;
+    ctx.beginPath();
+    ctx.arc(rnd() * size, rnd() * size, 10 + rnd() * 70, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.repeat.set(6, 6);
+  return t;
+}
+
 function Studio({ reflective }: { reflective: boolean }) {
+  const floorRough = useMemo(floorRoughness, []);
   return (
     <group>
       <mesh position={[0, 60, 0]}>
@@ -266,16 +312,15 @@ function Studio({ reflective }: { reflective: boolean }) {
           fragmentShader="uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float h = clamp((vP.y+60.0)/240.0,0.0,1.0); gl_FragColor = vec4(mix(bottom, top, pow(h,0.6)),1.0);} "
         />
       </mesh>
+      {/* Seamless polished epoxy floor: mottled roughness keeps reflections soft and real */}
       <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]} receiveShadow>
         <circleGeometry args={[220, 96]} />
         {reflective ? (
-          <MeshReflectorMaterial resolution={1024} blur={[400, 120]} mixBlur={1.1} mixStrength={2.2} roughness={0.85} depthScale={0.6} minDepthThreshold={0.3} maxDepthThreshold={1.2} color="#1b2026" metalness={0.4} mirror={0.4} />
+          <MeshReflectorMaterial resolution={1024} blur={[500, 160]} mixBlur={1.2} mixStrength={1.6} roughness={0.7} roughnessMap={floorRough} depthScale={0.5} minDepthThreshold={0.25} maxDepthThreshold={1.3} color="#20252b" metalness={0.25} mirror={0.35} />
         ) : (
-          <meshStandardMaterial color="#1c2127" roughness={0.55} metalness={0.3} />
+          <meshStandardMaterial color="#20252b" roughness={0.5} roughnessMap={floorRough} metalness={0.2} />
         )}
       </mesh>
-      {/* Precision floor grid */}
-      <gridHelper args={[200, 40, '#3a4450', '#262d35']} position={[0, 0.015, 0]} />
     </group>
   );
 }
@@ -356,6 +401,11 @@ export function World() {
   const setStudio = !flight && env === 'studio';
   const setHangar = !flight && env === 'hangar';
   const sunDir = useMemo(() => sunDirection(look.sunElevation, look.sunAzimuth), [look]);
+  const interior = section === 'cabin' || section === 'cockpit';
+  const hdri = flight ? undefined : interior ? HDRI.interior : HDRI[env];
+  // rotate the panorama so its sun sits where the shadow-casting light is
+  const envRotY = hdri?.sunU !== undefined ? (hdri.sunU - 0.5) * Math.PI * 2 - Math.atan2(sunDir.z, sunDir.x) : 0;
+  const hdriSky = !!hdri && !interior && env !== 'hangar' && env !== 'studio';
 
   useEffect(() => {
     worldFrame.world = world.current;
@@ -419,35 +469,45 @@ export function World() {
         shadow-bias={-0.0004}
         shadow-normalBias={0.04}
       />
-      <Environment key={`${env}-${weather}-${flight ? Math.round(timeOfDay) : 'x'}`} resolution={256} frames={1}>
-        {setStudio && (
-          <>
-            <color attach="background" args={['#14181d']} />
-            <Lightformer intensity={2.4} position={[0, 30, 0]} rotation-x={Math.PI / 2} scale={[90, 30, 1]} />
-            <Lightformer intensity={1.3} position={[-60, 12, 0]} rotation-y={Math.PI / 2} scale={[70, 10, 1]} />
-            <Lightformer intensity={1.3} position={[60, 12, 0]} rotation-y={-Math.PI / 2} scale={[70, 10, 1]} />
-            <Lightformer intensity={0.8} position={[0, 6, 70]} scale={[90, 5, 1]} color="#bfe9ff" />
-            <Lightformer intensity={0.5} position={[0, 6, -70]} rotation-y={Math.PI} scale={[90, 5, 1]} color="#ffe6cc" />
-          </>
-        )}
-        {setHangar && (
-          <>
-            <color attach="background" args={['#1a2230']} />
-            {[-30, -10, 10, 30].map((z) => (
-              <Lightformer key={z} intensity={2} position={[0, 32, z]} rotation-x={Math.PI / 2} scale={[70, 3, 1]} color="#eef4ff" />
-            ))}
-            <Lightformer intensity={1.2} position={[60, 14, 0]} rotation-y={-Math.PI / 2} scale={[100, 30, 1]} color="#33507f" />
-          </>
-        )}
-        {outdoor && !look.night && <Sky sunPosition={sunDir.clone().multiplyScalar(1000).toArray()} turbidity={4 + w.grey * 8} rayleigh={look.sunElevation < 10 ? 2.5 : 1.2} mieCoefficient={0.006} mieDirectionalG={0.85} />}
-        {outdoor && look.night && <color attach="background" args={['#0a1220']} />}
-        {outdoor && (
-          <mesh rotation-x={-Math.PI / 2} position={[0, -5, 0]}>
-            <circleGeometry args={[2000, 16]} />
-            <meshBasicMaterial color={look.night ? '#06080b' : '#4b5244'} />
-          </mesh>
-        )}
-      </Environment>
+      <Suspense fallback={null}>
+        <Environment
+          key={`${env}-${weather}-${flight ? Math.round(timeOfDay) : 'x'}-${interior ? 'in' : 'out'}`}
+          files={hdri ? HDRI_BASE + hdri.file : undefined}
+          environmentIntensity={(hdri?.intensity ?? 1) * (outdoor && !interior ? 1 - w.grey * 0.35 : 1)}
+          environmentRotation={[0, envRotY, 0]}
+          resolution={quality === 'ultra' || quality === 'high' ? 512 : 256}
+          frames={1}
+        >
+          {setStudio && !interior && (
+            <>
+              <color attach="background" args={['#14181d']} />
+              <Lightformer intensity={2.4} position={[0, 30, 0]} rotation-x={Math.PI / 2} scale={[90, 30, 1]} />
+              <Lightformer intensity={1.3} position={[-60, 12, 0]} rotation-y={Math.PI / 2} scale={[70, 10, 1]} />
+              <Lightformer intensity={1.3} position={[60, 12, 0]} rotation-y={-Math.PI / 2} scale={[70, 10, 1]} />
+              <Lightformer intensity={0.8} position={[0, 6, 70]} scale={[90, 5, 1]} color="#bfe9ff" />
+              <Lightformer intensity={0.5} position={[0, 6, -70]} rotation-y={Math.PI} scale={[90, 5, 1]} color="#ffe6cc" />
+            </>
+          )}
+          {setHangar && !interior && (
+            <>
+              {[-30, -10, 10, 30].map((z) => (
+                <Lightformer key={z} intensity={2} position={[0, 32, z]} rotation-x={Math.PI / 2} scale={[70, 3, 1]} color="#eef4ff" />
+              ))}
+              <Lightformer intensity={1.2} position={[60, 14, 0]} rotation-y={-Math.PI / 2} scale={[100, 30, 1]} color="#33507f" />
+            </>
+          )}
+          {outdoor && !hdriSky && !interior && !look.night && <Sky sunPosition={sunDir.clone().multiplyScalar(1000).toArray()} turbidity={4 + w.grey * 8} rayleigh={look.sunElevation < 10 ? 2.5 : 1.2} mieCoefficient={0.006} mieDirectionalG={0.85} />}
+          {outdoor && !hdri && look.night && <color attach="background" args={['#0a1220']} />}
+          {outdoor && !interior && (!hdriSky || hdri?.ground) && (
+            <mesh rotation-x={-Math.PI / 2} position={[0, -5, 0]}>
+              <circleGeometry args={[2000, 16]} />
+              <meshBasicMaterial color={look.night ? '#06080b' : (hdri?.ground ?? '#4b5244')} />
+            </mesh>
+          )}
+          {/* the probe needs at least one child to render through the portal */}
+          <group />
+        </Environment>
+      </Suspense>
 
       {outdoor && !look.night && <Sky distance={45000} sunPosition={sunDir.clone().multiplyScalar(1000).toArray()} turbidity={4 + w.grey * 8} rayleigh={look.sunElevation < 10 ? 2.5 : 1.2} mieCoefficient={0.006} mieDirectionalG={0.85} />}
       {outdoor && look.night && <Stars radius={4000} depth={200} count={4000} factor={60} saturation={0} fade speed={0.2} />}

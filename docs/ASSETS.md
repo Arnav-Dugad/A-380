@@ -50,6 +50,15 @@ the procedural one.
 
 All of these are original or open-licensed:
 
+- **HDR environment maps (image-based lighting), all CC0 from Poly Haven.** They light and
+  reflect on the aircraft in the airport, golden-hour, night, hangar and interior views.
+  They are copied from redistributions that the build environment could reach:
+  - `blouberg_sunrise_2_1k.hdr` and `moonless_golf_1k.hdr` come from the three.js examples
+    (`examples/textures/equirectangular`, MIT repository, CC0 assets);
+  - `sky.exr` and `warehouse.exr` come from the `@pmndrs/assets` package (CC0).
+- **Upholstery weave, leather grain, carpet and seat-back screen textures, and livery
+  weathering.** Generated at runtime on HTML canvas; original work.
+
 - **Livery, panel lines, runway asphalt, concrete, grass, clouds, display canvases.**
   Generated at runtime on HTML canvas; original work.
 - **Fonts.** *Inter* (SIL Open Font License 1.1) and *JetBrains Mono* (SIL OFL 1.1), served

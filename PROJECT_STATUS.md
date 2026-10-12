@@ -156,6 +156,51 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   - device-appropriate default graphics preset;
   - web app manifest, home-screen icons and a share preview image.
 
+## Fidelity upgrade
+
+- ✅ Three exterior LODs. `ultra` (about 1.05 M triangles) is used on High and Ultra, `hi` on
+  Balanced and `lo` on Performance and phones.
+- ✅ Ray-traced per-vertex ambient occlusion baked into every GLB and applied to indirect light.
+- ✅ Image-based lighting from CC0 HDR panoramas, aligned with the sun, for the airport,
+  golden-hour, night, hangar and interior views.
+- ✅ Physically based materials:
+  - clear-coated paint with panel tone variation, grime and APU soot;
+  - polished inlet lips;
+  - anisotropic fan, hub and galley metals;
+  - light-grey painted landing gear with chrome sliders;
+  - rubber with sheen;
+  - reflective glazing.
+- ✅ Landing gear detail:
+  - collars and gland nuts;
+  - scissor torque links with lugs and pins;
+  - hydraulic and brake lines;
+  - folding side braces;
+  - tapered bogie beams with pitch trimmers.
+- ✅ Exterior details: pitot probes, angle-of-attack vanes, temperature probes, a SATCOM
+  radome and air-conditioning pack inlets.
+- ✅ Cabin:
+  - upholstered seats with dished backs, headrest wings and tubular frames;
+  - a seat-back entertainment screen in every seat;
+  - leather first-class suites;
+  - window reveals with shades at varied heights;
+  - curved overhead bins with door seams and latches;
+  - passenger service units with reading lights, and cove lighting.
+- ✅ Flight deck:
+  - contoured crew seats on rails;
+  - a populated overhead switch field;
+  - EFIS knobs and an autopilot control panel body;
+  - keyboard and cursor-control units with keys and trackballs;
+  - shaped side-stick grips.
+- ✅ Ground support equipment:
+  - belt loaders;
+  - a baggage train with LD3 containers;
+  - a catering truck raised to the main deck;
+  - a fuel tanker, pushback tug and ground power unit with its cable.
+- ✅ A seamless polished-epoxy studio floor.
+- 🟡 Photorealism has limits. Geometry is procedural, and the livery and textures are drawn
+  on canvas rather than scanned or photographed. There are no ray-traced reflections, and
+  global illumination is approximated by HDR lighting, baked AO and N8AO.
+
 ## Known limitations
 
 - Several geometric details are approximations because Airbus drawings are proprietary or

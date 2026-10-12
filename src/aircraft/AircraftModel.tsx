@@ -28,20 +28,21 @@ function AircraftLod({ lod }: { lod: Lod }) {
 }
 
 /**
- * Progressive loading: the low-detail set renders first, the high-detail set replaces it
- * when ready (unless a low quality profile is active).
+ * Progressive loading: the low-detail set renders first and the requested tier replaces it
+ * when ready (`ultra` ≈ 1 M triangles for High and Ultra, `hi` for Balanced, `lo` for
+ * Performance and phones).
  */
-export function AircraftModel({ highDetail }: { highDetail: boolean }) {
+export function AircraftModel({ detail }: { detail: Lod }) {
   return (
     <Suspense fallback={null}>
       <Bvh firstHitOnly>
-      {highDetail ? (
-        <Suspense fallback={<AircraftLod lod="lo" />}>
-          <AircraftLod lod="hi" />
-        </Suspense>
-      ) : (
-        <AircraftLod lod="lo" />
-      )}
+        {detail === 'lo' ? (
+          <AircraftLod lod="lo" />
+        ) : (
+          <Suspense fallback={<AircraftLod lod="lo" />}>
+            <AircraftLod lod={detail} />
+          </Suspense>
+        )}
       </Bvh>
     </Suspense>
   );

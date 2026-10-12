@@ -51,7 +51,7 @@ export function Viewport() {
         }}
         name="aircraftRoot"
       >
-        <AircraftModel highDetail={quality !== 'performance'} />
+        <AircraftModel detail={quality === 'performance' ? 'lo' : quality === 'balanced' ? 'hi' : 'ultra'} />
         <StructureLayer />
         <CockpitScene />
         <CabinScene />

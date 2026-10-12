@@ -4,7 +4,8 @@
  * gears retract aft (bogie counter-rotates to stay level), nose gear retracts forward
  * (direction marked as an approximation in docs/ACCURACY.md).
  */
-import { BoxGeometry, Quaternion, Vector3, type BufferGeometry, type Group } from 'three';
+import { BufferAttribute, BufferGeometry, BoxGeometry, Quaternion, Vector3, type Group } from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { GEAR, sx } from './layout';
 import type { Vec3 } from './math';
 import { group, mesh, pivoted } from './parts';
@@ -43,6 +44,52 @@ export function box(c: Vec3, size: Vec3, rotY = 0, rotZ = 0, rotX = 0): BufferGe
   g.rotateY(rotY);
   g.translate(c[0], c[1], c[2]);
   return g;
+}
+
+/**
+ * Rounded box (upholstery, mouldings): `r` is the edge radius. `bend` curves the box about
+ * its local Y axis (x += bend · z²), e.g. to dish a seat back around the occupant. Rotations
+ * are applied about the box centre in the order X, Z, Y, as for `box`.
+ */
+let roundingDetail = 1;
+/** Global rounding detail for `rbox` (1 = normal; < 1 forces single-segment bevels). */
+export function setRoundingDetail(q: number): void {
+  roundingDetail = q;
+}
+
+export function rbox(c: Vec3, size: Vec3, r: number, rotZ = 0, rotY = 0, rotX = 0, bend = 0, seg?: number): BufferGeometry {
+  // rounding density follows part size: cushions get smooth edges, switches and keys stay light
+  const thin = Math.min(...size) < 0.07;
+  const segs = roundingDetail < 1 ? 1 : (seg ?? (Math.max(...size) > 0.3 && !thin ? 2 : 1));
+  const g = new RoundedBoxGeometry(size[0], size[1], size[2], segs, Math.min(r, Math.min(...size) / 2 - 1e-4)) as BufferGeometry;
+  if (!g.getIndex()) g.setIndex(Array.from({ length: g.getAttribute('position').count }, (_, i) => i));
+  if (bend) {
+    const p = g.getAttribute('position');
+    for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i) + bend * p.getZ(i) * p.getZ(i));
+    g.computeVertexNormals();
+  }
+  g.rotateX(rotX);
+  g.rotateZ(rotZ);
+  g.rotateY(rotY);
+  g.translate(c[0], c[1], c[2]);
+  return g;
+}
+
+/** A textured rectangle facing −X (towards a viewer looking forward along +X), rotated about Z. */
+export function quadAft(c: Vec3, w: number, h: number, rotZ = 0): BufferGeometry {
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array([0, -h / 2, -w / 2, 0, -h / 2, w / 2, 0, h / 2, w / 2, 0, h / 2, -w / 2]), 3));
+  g.setAttribute('normal', new BufferAttribute(new Float32Array([-1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0]), 3));
+  g.setAttribute('uv', new BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
+  g.setIndex([0, 2, 1, 0, 3, 2]);
+  g.rotateZ(rotZ);
+  g.translate(c[0], c[1], c[2]);
+  return g;
+}
+
+/** Rotate a point (dx, dy) about Z and add it to a centre — places parts on reclined seat backs. */
+export function onTilted(c: Vec3, dx: number, dy: number, rotZ: number, dz = 0): Vec3 {
+  return [c[0] + dx * Math.cos(rotZ) - dy * Math.sin(rotZ), c[1] + dx * Math.sin(rotZ) + dy * Math.cos(rotZ), c[2] + dz];
 }
 
 /** Tyre with four circumferential grooves; local axle along Z. */
@@ -101,16 +148,50 @@ function wheel(name: string, centre: Vec3, R: number, W: number, outboard: 1 | -
   return pivoted(name, centre, [mesh(`${name}_tyre`, t, 'tyre', 'wheel'), mesh(`${name}_hub`, hb, 'hub', 'wheel')], { kind: 'spin', axis: [0, 0, 1] }, 'wheel');
 }
 
-function strutParts(top: Vec3, bottom: Vec3, rOuter: number): { outer: BufferGeometry; slider: BufferGeometry; links: BufferGeometry } {
+/**
+ * Oleo-pneumatic strut: painted outer cylinder with collars and a gland nut, chrome sliding
+ * tube, scissor-type torque links (tapered arms, lugs and pins) and hydraulic / brake lines
+ * running down the forward face. `fwd` is the side the torque links stand out on (+X).
+ */
+function strutParts(top: Vec3, bottom: Vec3, rOuter: number, quality = 1): { outer: BufferGeometry; slider: BufferGeometry; links: BufferGeometry; lines: BufferGeometry } {
+  const seg = Math.max(12, Math.round(24 * quality));
   const mid: Vec3 = [top[0], bottom[1] + (top[1] - bottom[1]) * 0.42, top[2]];
-  const outer = merge([cylinder(top, mid, rOuter, 22), cylinder(mid, [mid[0], mid[1] - 0.1, mid[2]], rOuter * 1.18, 22)]);
-  const slider = cylinder([mid[0], mid[1] + 0.1, mid[2]], bottom, rOuter * 0.68, 22);
-  const lk = 0.55;
-  const links = merge([
-    box([mid[0] + 0.18, mid[1] + 0.27, mid[2]], [0.07, lk, 0.1], 0, 0.45),
-    box([mid[0] + 0.18, mid[1] - 0.27, mid[2]], [0.07, lk, 0.1], 0, -0.45),
+  const at = (y: number): Vec3 => [top[0], y, top[2]];
+  const outer = merge([
+    cylinder(top, mid, rOuter, seg),
+    // trunnion collar, mid collar and the gland nut at the bottom of the cylinder
+    cylinder(at(top[1] - 0.02), at(top[1] - 0.16), rOuter * 1.16, seg),
+    cylinder(at(mid[1] + (top[1] - mid[1]) * 0.45 + 0.04), at(mid[1] + (top[1] - mid[1]) * 0.45 - 0.04), rOuter * 1.08, seg),
+    cylinder(at(mid[1] + 0.02), at(mid[1] - 0.1), rOuter * 1.2, seg),
+    cylinder(at(mid[1] - 0.1), at(mid[1] - 0.14), rOuter * 1.05, seg),
   ]);
-  return { outer, slider, links };
+  const slider = merge([
+    cylinder([mid[0], mid[1] + 0.1, mid[2]], bottom, rOuter * 0.68, seg),
+    // axle / bogie pivot fork at the bottom of the slider
+    cylinder([bottom[0], bottom[1] + 0.22, bottom[2]], [bottom[0], bottom[1] - 0.02, bottom[2]], rOuter * 0.86, seg),
+  ]);
+  // Torque links: upper arm from the gland nut, lower arm to the slider fork, apex forward
+  const upperLug: Vec3 = [mid[0] + rOuter * 0.95, mid[1] - 0.08, mid[2]];
+  const lowerLug: Vec3 = [bottom[0] + rOuter * 0.95, bottom[1] + 0.2, bottom[2]];
+  const apex: Vec3 = [mid[0] + rOuter + Math.max(0.22, (upperLug[1] - lowerLug[1]) * 0.42), (upperLug[1] + lowerLug[1]) / 2, mid[2]];
+  const arm = (a: Vec3, b: Vec3) => {
+    const parts: BufferGeometry[] = [];
+    for (const dz of [-0.045, 0.045]) parts.push(cylinder([a[0], a[1], a[2] + dz], [b[0], b[1], b[2] + dz], 0.026, 10, 0.018));
+    return merge(parts);
+  };
+  const pin = (p: Vec3, r = 0.03) => cylinder([p[0], p[1], p[2] - 0.075], [p[0], p[1], p[2] + 0.075], r, 12);
+  const links = merge([arm(upperLug, apex), arm(lowerLug, apex), pin(upperLug), pin(lowerLug), pin(apex, 0.034)]);
+  // Hydraulic and brake lines on the forward face, with a loop at the knuckle
+  const lines: BufferGeometry[] = [];
+  for (const dz of [-0.06, 0.06]) {
+    const x = top[0] + rOuter * 1.25;
+    const p0: Vec3 = [x, top[1] - 0.2, top[2] + dz];
+    const p1: Vec3 = [x, mid[1] + 0.05, top[2] + dz];
+    const p2: Vec3 = [apex[0] + 0.05, apex[1], top[2] + dz];
+    const p3: Vec3 = [bottom[0] + rOuter * 1.1, bottom[1] + 0.1, bottom[2] + dz];
+    lines.push(cylinder(p0, p1, 0.012, 8), cylinder(p1, p2, 0.012, 8), cylinder(p2, p3, 0.012, 8));
+  }
+  return { outer, slider, links, lines: merge(lines) };
 }
 
 // ---------------------------------------------------------------- nose gear
@@ -118,7 +199,7 @@ function noseGear(quality: number): Group {
   const { s } = GEAR.nose;
   const axle: Vec3 = [sx(s), NOSE_TYRE_R, 0];
   const pivot: Vec3 = [sx(s - 0.25), 3.05, 0];
-  const st = strutParts([axle[0] + 0.12, pivot[1], 0], [axle[0], axle[1] + 0.12, 0], 0.15);
+  const st = strutParts([axle[0] + 0.12, pivot[1], 0], [axle[0], axle[1] + 0.12, 0], 0.15, quality);
   const steer = pivoted(
     'nose_steer',
     [axle[0], 0, 0],
@@ -136,9 +217,10 @@ function noseGear(quality: number): Group {
     'gear_nose',
     pivot,
     [
-      mesh('nose_strut', st.outer, 'darkMetal', 'noseGear'),
-      mesh('nose_links', st.links, 'darkMetal', 'noseGear'),
-      mesh('nose_drag_brace', cylinder([pivot[0] - 0.1, 2.1, 0], [pivot[0] + 1.6, 3.0, 0], 0.07, 12), 'darkMetal', 'noseGear'),
+      mesh('nose_strut', st.outer, 'gearPaint', 'noseGear'),
+      mesh('nose_links', st.links, 'gearPaint', 'noseGear'),
+      mesh('nose_lines', st.lines, 'darkMetal', 'noseGear'),
+      mesh('nose_drag_brace', merge([cylinder([pivot[0] - 0.1, 2.1, 0], [pivot[0] + 1.6, 3.0, 0], 0.07, 16), cylinder([pivot[0] - 0.1, 2.1, -0.12], [pivot[0] - 0.1, 2.1, 0.12], 0.05, 12), cylinder([pivot[0] + 0.75, 2.58, -0.1], [pivot[0] + 0.75, 2.58, 0.1], 0.06, 12)]), 'gearPaint', 'noseGear'),
       mesh('nose_leg_door', box([axle[0] - 0.02, 2.2, 0], [0.03, 1.2, 0.7]), 'paintBelly', 'gearDoor'),
       steer,
     ],
@@ -210,11 +292,27 @@ function mainGear(kind: 'wing' | 'body', side: 1 | -1, quality: number): Group {
   const bogieC: Vec3 = [sx(cfg.s), bogieY, z];
   const pivotY = kind === 'wing' ? 4.95 : 4.25;
   const pivot: Vec3 = kind === 'wing' ? [bogieC[0], pivotY, z] : [bogieC[0] + 0.0, pivotY, z];
-  const st = strutParts([pivot[0], pivotY, z], [bogieC[0], bogieY + 0.05, z], 0.2);
+  const st = strutParts([pivot[0], pivotY, z], [bogieC[0], bogieY + 0.05, z], 0.2, quality);
 
   const bogieParts: (Group | ReturnType<typeof mesh>)[] = [];
   const len = Math.abs(axles[axles.length - 1]! - axles[0]!) + 0.5;
-  bogieParts.push(mesh(`${id}_beam`, cylinder([bogieC[0] + len / 2, bogieY, z], [bogieC[0] - len / 2, bogieY, z], 0.13, 16), 'darkMetal', `${kind}Gear`));
+  // Bogie beam: thickest at the pivot, tapering to end caps, with a pitch-trimmer actuator
+  const half = len / 2;
+  bogieParts.push(
+    mesh(
+      `${id}_beam`,
+      merge([
+        cylinder([bogieC[0], bogieY, z], [bogieC[0] + half, bogieY, z], 0.15, 20, 0.1),
+        cylinder([bogieC[0], bogieY, z], [bogieC[0] - half, bogieY, z], 0.15, 20, 0.1),
+        cylinder([bogieC[0] + half, bogieY, z], [bogieC[0] + half + 0.06, bogieY, z], 0.1, 16, 0.07),
+        cylinder([bogieC[0] - half, bogieY, z], [bogieC[0] - half - 0.06, bogieY, z], 0.1, 16, 0.07),
+        cylinder([bogieC[0], bogieY, z - 0.2], [bogieC[0], bogieY, z + 0.2], 0.12, 16),
+      ]),
+      'gearPaint',
+      `${kind}Gear`,
+    ),
+    mesh(`${id}_trimmer`, cylinder([bogieC[0] + 0.25, bogieY + 0.2, z + 0.16], [bogieC[0] + half * 0.7, bogieY + 0.06, z + 0.16], 0.045, 12), 'chrome', `${kind}Gear`),
+  );
   const tw = cfg.wheelTrack / 2;
   axles.forEach((ds, k) => {
     const ax = bogieC[0] - ds;
@@ -246,10 +344,22 @@ function mainGear(kind: 'wing' | 'body', side: 1 | -1, quality: number): Group {
     id,
     pivot,
     [
-      mesh(`${id}_strut`, st.outer, 'darkMetal', `${kind}Gear`),
+      mesh(`${id}_strut`, st.outer, 'gearPaint', `${kind}Gear`),
       mesh(`${id}_slider`, st.slider, 'chrome', `${kind}Gear`),
-      mesh(`${id}_links`, st.links, 'darkMetal', `${kind}Gear`),
-      mesh(`${id}_brace`, merge([cylinder(braceBot, braceTop, 0.085, 12), cylinder([braceBot[0], braceBot[1] + 0.05, braceBot[2]], [braceTop[0], braceTop[1] - 0.05, braceTop[2]], 0.06, 12)]), 'darkMetal', `${kind}Gear`),
+      mesh(`${id}_links`, st.links, 'gearPaint', `${kind}Gear`),
+      mesh(`${id}_lines`, st.lines, 'darkMetal', `${kind}Gear`),
+      mesh(
+        `${id}_brace`,
+        merge([
+          // folding side brace: two tubes meeting at a knuckle, plus the lock-link
+          cylinder(braceBot, [(braceBot[0] + braceTop[0]) / 2, (braceBot[1] + braceTop[1]) / 2 + 0.12, (braceBot[2] + braceTop[2]) / 2], 0.085, 16),
+          cylinder([(braceBot[0] + braceTop[0]) / 2, (braceBot[1] + braceTop[1]) / 2 + 0.12, (braceBot[2] + braceTop[2]) / 2], braceTop, 0.085, 16),
+          cylinder([(braceBot[0] + braceTop[0]) / 2, (braceBot[1] + braceTop[1]) / 2 + 0.12, (braceBot[2] + braceTop[2]) / 2], [pivot[0], pivotY - 0.9, z], 0.04, 10),
+          cylinder([braceBot[0], braceBot[1], braceBot[2] - 0.13], [braceBot[0], braceBot[1], braceBot[2] + 0.13], 0.07, 12),
+        ]),
+        'gearPaint',
+        `${kind}Gear`,
+      ),
       mesh(`${id}_leg_door`, box([pivot[0], 3.0, z + side * 0.3], [1.2, 1.7, 0.03]), 'paintBelly', 'gearDoor'),
       bogie,
     ],

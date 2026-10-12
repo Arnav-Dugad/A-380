@@ -5,6 +5,7 @@
 import { BufferAttribute, BufferGeometry as BufferGeometryCtor, type BufferGeometry, type Group } from 'three';
 import { DOORS, L, MAIN_DECK_FLOOR, UPPER_DECK_FLOOR, sx } from './layout';
 import {
+  bellyFairingPoint,
   buildBellyFairing,
   buildFuselageSkin,
   conformalShape,
@@ -19,6 +20,7 @@ import {
 import { deg, type Vec3 } from './math';
 import { group, mesh, pivoted } from './parts';
 import { lathe, merge, orientOutward } from './surface';
+import { box, cylinder } from './gear';
 
 const WIN_W = 0.27;
 const WIN_H = 0.38;
@@ -203,6 +205,71 @@ function blade(s: number, top: boolean, h = 0.42, chord = 0.55): BufferGeometry 
   return orientOutward(flat);
 }
 
+/** A point on the skin at (s, height y) on one side, pushed out along the normal by `off`. */
+function skinAt(s: number, y: number, side: 1 | -1, off = 0): { p: Vec3; n: Vec3 } {
+  const th = thetaAtHeight(s, y, side);
+  const p = fuselagePoint(s, th);
+  const n = fuselageNormal(s, th);
+  return { p: [p[0] + n[0] * off, p[1] + n[1] * off, p[2] + n[2] * off], n };
+}
+
+/**
+ * Air-data probes on the nose: three L-shaped pitot tubes, three angle-of-attack vanes and
+ * two total-air-temperature probes, mirrored left and right. Positions are approximate.
+ */
+function airDataProbes(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const side of [1, -1] as const) {
+    for (const [s, y] of side === 1 ? [[5.1, 5.75], [5.55, 5.45]] : [[5.1, 5.75]]) {
+      const { p, n } = skinAt(s!, y!, side);
+      const stem: Vec3 = [p[0] + n[0] * 0.13, p[1] + n[1] * 0.13 - 0.03, p[2] + n[2] * 0.13];
+      parts.push(cylinder(p, stem, 0.022, 10, 0.014));
+      parts.push(cylinder([stem[0] - 0.05, stem[1], stem[2]], [stem[0] + 0.22, stem[1], stem[2]], 0.011, 10, 0.009));
+      parts.push(cylinder(p, [p[0] - n[0] * 0.01, p[1], p[2] - n[2] * 0.01], 0.05, 14));
+    }
+    // angle-of-attack vane (thin swept plate on a round base)
+    const a = skinAt(6.4, 5.4, side);
+    parts.push(cylinder(a.p, [a.p[0] + a.n[0] * 0.012, a.p[1] + a.n[1] * 0.012, a.p[2] + a.n[2] * 0.012], 0.06, 16));
+    parts.push(box([a.p[0] - 0.02, a.p[1] + a.n[1] * 0.07, a.p[2] + a.n[2] * 0.07], [0.12, 0.012, 0.1], 0, 0.3, Math.atan2(a.n[1], a.n[2])));
+    // total-air-temperature probe (short strut with a scoop)
+    const t = skinAt(7.6, 6.6, side);
+    parts.push(box([t.p[0], t.p[1] + t.n[1] * 0.06, t.p[2] + t.n[2] * 0.06], [0.07, 0.03, 0.12], 0, 0, Math.atan2(t.n[1], t.n[2])));
+  }
+  return merge(parts);
+}
+
+/** SATCOM antenna fairing: a low elongated dome on the crown. */
+function satcomRadome(quality: number): BufferGeometry {
+  const len = 2.6;
+  const h = 0.3;
+  const prof: [number, number][] = [];
+  const n = Math.max(10, Math.round(20 * quality));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    prof.push([t * len, Math.max(0.0005, h * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.7))]);
+  }
+  const g = orientOutward(lathe(prof, Math.max(16, Math.round(28 * quality))));
+  g.scale(1, 1, 2.2);
+  const top = fuselagePoint(44.5, Math.PI / 2);
+  g.translate(sx(44.5 + len) , top[1] - 0.02, 0);
+  return g;
+}
+
+/** Ram-air inlets and outlets of the air-conditioning packs on the belly fairing (recessed). */
+function packInlets(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const side of [1, -1] as const) {
+    for (const [s, t, w, l] of [
+      [36.2, 0.55, 0.45, 1.1],
+      [41.5, 0.62, 0.35, 0.8],
+    ] as const) {
+      const p = bellyFairingPoint(s, t, side);
+      parts.push(box([sx(s), p[1] - 0.004, p[2]], [l, 0.01, w]));
+    }
+  }
+  return merge(parts);
+}
+
 export function buildAirframe(quality: number): Group {
   const root = group('airframe', [], 'fuselage');
   root.add(mesh('fuselage_skin', buildFuselageSkin({ rows: Math.round(240 * quality), around: Math.round(112 * quality) }), 'paint', 'fuselage'));
@@ -222,6 +289,8 @@ export function buildAirframe(quality: number): Group {
 
   root.add(mesh('apu_exhaust', apuExhaust(), 'exhaust', 'apu'));
   const antennas = merge([blade(14.5, true), blade(27.0, true, 0.32, 0.45), blade(46.5, true, 0.36), blade(11.0, false), blade(33.0, false, 0.3, 0.45)]);
-  root.add(mesh('antennas', antennas, 'composite', 'antennas'));
+  root.add(mesh('antennas', merge([antennas, satcomRadome(quality)]), 'composite', 'antennas'));
+  root.add(mesh('air_data_probes', airDataProbes(), 'metal', 'antennas'));
+  root.add(mesh('pack_inlets', packInlets(), 'seal', 'bellyFairing'));
   return root;
 }
