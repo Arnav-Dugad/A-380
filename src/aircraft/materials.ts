@@ -78,7 +78,7 @@ const weaveBump = () =>
   });
 
 /** Leather grain: soft cellular pebbling. */
-const leatherBump = () =>
+export const leatherBump = () =>
   tile(256, [6, 6], false, (ctx, rnd) => {
     ctx.fillStyle = '#9a9a9a';
     ctx.fillRect(0, 0, 256, 256);
@@ -91,17 +91,17 @@ const leatherBump = () =>
     }
   });
 
-/** Cabin carpet: heathered loop pile with a quiet repeating motif. */
+/** Cabin carpet: heathered taupe loop pile with a faint tonal motif. */
 const carpetMap = () =>
   tile(512, [70, 9], true, (ctx, rnd) => {
-    ctx.fillStyle = '#2f3845';
+    ctx.fillStyle = '#5b5852';
     ctx.fillRect(0, 0, 512, 512);
     for (let i = 0; i < 26000; i++) {
       const v = rnd();
-      ctx.fillStyle = v > 0.5 ? `rgba(70,84,102,${0.25 + rnd() * 0.3})` : `rgba(20,25,32,${0.25 + rnd() * 0.3})`;
+      ctx.fillStyle = v > 0.5 ? `rgba(120,114,104,${0.25 + rnd() * 0.3})` : `rgba(40,38,35,${0.25 + rnd() * 0.3})`;
       ctx.fillRect(rnd() * 512, rnd() * 512, 2, 2);
     }
-    ctx.strokeStyle = 'rgba(111,160,190,0.22)';
+    ctx.strokeStyle = 'rgba(150,140,120,0.16)';
     ctx.lineWidth = 3;
     for (let k = 0; k < 4; k++) {
       ctx.beginPath();
@@ -109,6 +109,122 @@ const carpetMap = () =>
       ctx.stroke();
     }
   });
+
+/** Diamond-quilted upholstery: stitched lattice with padded cells (bump). */
+const quiltBump = (repeat: number) =>
+  tile(256, [repeat, repeat], false, (ctx) => {
+    const S = 256;
+    const img = ctx.createImageData(S, S);
+    for (let y = 0; y < S; y++)
+      for (let x = 0; x < S; x++) {
+        // distance to the nearest diagonal stitch line (two diamonds per tile)
+        const u = ((x + y) / S) * 2;
+        const v = ((x - y + S) / S) * 2;
+        const du = Math.abs(u - Math.round(u));
+        const dv = Math.abs(v - Math.round(v));
+        const d = Math.min(du, dv);
+        const puff = Math.sin(Math.min(1, d / 0.5) * Math.PI * 0.5);
+        const stitch = d < 0.025 ? 0.55 : 1;
+        const g = (70 + 150 * puff) * stitch;
+        const o = (y * S + x) * 4;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = g;
+        img.data[o + 3] = 255;
+      }
+    ctx.putImageData(img, 0, 0);
+  });
+
+/** Economy fabric: pale grey fading to aqua towards the cushion, finely stippled. */
+const economyFabricMap = () =>
+  tile(512, [1, 1], true, (ctx, rnd) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, '#d4dadd');
+    g.addColorStop(0.55, '#b7cdd6');
+    g.addColorStop(1, '#8fc0d1');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 512; y += 3)
+      for (let x = 0; x < 512; x += 3) {
+        const k = rnd();
+        if (k > 0.55) {
+          ctx.fillStyle = k > 0.8 ? 'rgba(255,255,255,0.28)' : 'rgba(50,80,95,0.14)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+  });
+
+/** Printed cushion fabric: drifting leaf motif on taupe (headrest covers, pillows). */
+const cushionMap = () =>
+  tile(512, [2, 2], true, (ctx, rnd) => {
+    ctx.fillStyle = '#8f8a84';
+    ctx.fillRect(0, 0, 512, 512);
+    for (let k = 0; k < 220; k++) {
+      ctx.save();
+      ctx.translate(rnd() * 512, rnd() * 512);
+      ctx.rotate(rnd() * Math.PI * 2);
+      ctx.fillStyle = rnd() > 0.5 ? 'rgba(78,64,52,0.65)' : 'rgba(200,190,175,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6 + rnd() * 9, 2.5 + rnd() * 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+
+/** Walnut veneer: long figured grain with lacquer depth. */
+const woodMap = () =>
+  tile(512, [1, 1], true, (ctx, rnd) => {
+    ctx.fillStyle = '#6a4a31';
+    ctx.fillRect(0, 0, 512, 512);
+    for (let k = 0; k < 140; k++) {
+      const y0 = rnd() * 512;
+      const amp = 4 + rnd() * 18;
+      const ph = rnd() * 6;
+      ctx.strokeStyle = rnd() > 0.5 ? `rgba(40,24,14,${0.2 + rnd() * 0.35})` : `rgba(160,118,80,${0.15 + rnd() * 0.25})`;
+      ctx.lineWidth = 0.6 + rnd() * 2.6;
+      ctx.beginPath();
+      for (let x = 0; x <= 512; x += 8) {
+        const y = y0 + Math.sin(x / 70 + ph) * amp + Math.sin(x / 23 + ph * 2) * amp * 0.2;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+
+/** Pale stone with soft grey veining. */
+const marbleMap = () =>
+  tile(512, [1, 1], true, (ctx, rnd) => {
+    ctx.fillStyle = '#ebe7e0';
+    ctx.fillRect(0, 0, 512, 512);
+    for (let k = 0; k < 26; k++) {
+      ctx.strokeStyle = `rgba(120,116,110,${0.08 + rnd() * 0.25})`;
+      ctx.lineWidth = 0.5 + rnd() * 2;
+      ctx.beginPath();
+      let x = rnd() * 512;
+      let y = rnd() * 512;
+      ctx.moveTo(x, y);
+      for (let s = 0; s < 20; s++) {
+        x += (rnd() - 0.3) * 40;
+        y += (rnd() - 0.5) * 30;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+
+/** Illuminated EXIT sign face. */
+function exitSignMap(): Texture {
+  const [c, ctx] = canvas(256, 96);
+  ctx.fillStyle = '#c4161c';
+  ctx.fillRect(0, 0, 256, 96);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 64px Inter, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('EXIT', 128, 52);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
 
 /** Acoustic liner: a fine grid of perforations. */
 const linerBump = () =>
@@ -141,8 +257,50 @@ function spinnerMap(): Texture {
   return t;
 }
 
-/** Seat-back entertainment screen: a moving-map style idle screen. */
+/** Seat-back entertainment screen: a welcome page with content tiles (fictional branding). */
 function ifeTexture(): Texture {
+  const [c, ctx] = canvas(512, 320);
+  const bg = ctx.createLinearGradient(0, 0, 512, 320);
+  bg.addColorStop(0, '#0d2033');
+  bg.addColorStop(1, '#173a52');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 320);
+  // hero banner: a sunset over a wing
+  const sky = ctx.createLinearGradient(0, 40, 0, 170);
+  sky.addColorStop(0, '#f2a65a');
+  sky.addColorStop(1, '#5b3a6e');
+  ctx.fillStyle = sky;
+  ctx.fillRect(20, 46, 472, 124);
+  ctx.fillStyle = 'rgba(20,20,30,0.85)';
+  ctx.beginPath();
+  ctx.moveTo(20, 150);
+  ctx.lineTo(380, 118);
+  ctx.lineTo(492, 124);
+  ctx.lineTo(492, 170);
+  ctx.lineTo(20, 170);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '300 34px Inter, Arial, sans-serif';
+  ctx.fillText('Welcome aboard', 36, 92);
+  ctx.font = '500 13px Inter, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillText('A380 · DIGITAL TWIN', 38, 116);
+  const tiles = ['Movies', 'TV', 'Music', 'Map', 'Games'];
+  tiles.forEach((t, i) => {
+    const x = 20 + i * 96;
+    ctx.fillStyle = ['#2b6c8f', '#7a4d8f', '#3f8f6a', '#8f6a2b', '#8f2b4d'][i]!;
+    ctx.fillRect(x, 190, 88, 84);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 13px Inter, Arial, sans-serif';
+    ctx.fillText(t, x + 8, 290);
+  });
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/** Previous idle screen, kept for reference. */
+export function movingMapTexture(): Texture {
   const [c, ctx] = canvas(256, 160);
   const g = ctx.createLinearGradient(0, 0, 0, 160);
   g.addColorStop(0, '#0c2a4a');
@@ -284,15 +442,30 @@ export function getMaterials(): MaterialLibrary {
     lightGreen: emissive('#2aff6a', 4),
     lightWhite: emissive('#ffffff', 5),
     lightAmber: emissive('#ffb347', 3),
-    cabinWall: std('#ece9e3', 0.62, 0, { side: DoubleSide, roughnessMap: noise }),
+    cabinWall: std('#efe8dc', 0.62, 0, { side: DoubleSide, roughnessMap: noise }),
+    cushion: new MeshPhysicalMaterial({ color: '#ffffff', map: cushionMap(), roughness: 0.95, sheen: 0.8, sheenColor: new Color('#d8cbb8'), sheenRoughness: 0.6, bumpMap: weaveBump(), bumpScale: 0.4 }),
+    wood: phys('#ffffff', 0.32, 0, { map: woodMap(), clearcoat: 0.85, clearcoatRoughness: 0.12 }),
+    marble: phys('#ffffff', 0.18, 0, { map: marbleMap(), clearcoat: 1, clearcoatRoughness: 0.05 }),
+    bottle: new MeshPhysicalMaterial({ color: '#3a1c08', roughness: 0.08, emissive: new Color('#d08a3a'), emissiveIntensity: 0.9, clearcoat: 1, transparent: true, opacity: 0.92 }),
+    exitSign: std('#ffffff', 0.4, 0, { map: exitSignMap(), emissive: new Color('#ffffff'), emissiveMap: exitSignMap(), emissiveIntensity: 1.6 }),
+    pathLight: emissive('#ffcf7a', 1.2),
+    sheepskin: new MeshPhysicalMaterial({ color: '#e9e0cf', roughness: 1, sheen: 1, sheenColor: new Color('#fffaf0'), sheenRoughness: 0.9, bumpMap: leatherBump(), bumpScale: 1.6 }),
+    visor: new MeshPhysicalMaterial({ color: '#3a2f1a', roughness: 0.1, transparent: true, opacity: 0.55, clearcoat: 1, side: DoubleSide, depthWrite: false }),
+    curtain: new MeshPhysicalMaterial({ color: '#8f8474', roughness: 0.9, sheen: 1, sheenColor: new Color('#cbbda8'), sheenRoughness: 0.5, side: DoubleSide, bumpMap: weaveBump(), bumpScale: 0.3 }),
     cabinFloor: std('#3d4148', 0.8, 0),
     carpet: std('#ffffff', 1, 0, { map: carpetMap() }),
-    seatFabric: fabric('#2c3a4e', '#7f93ad'),
-    seatFabricBiz: fabric('#2a2e35', '#8a929c'),
-    seatFabricFirst: fabric('#6d5c49', '#c9b79f'),
-    leather: phys('#7a5f45', 0.48, 0, { clearcoat: 0.25, clearcoatRoughness: 0.4, bumpMap: leatherBump(), bumpScale: 0.5, sheen: 0.4, sheenColor: new Color('#b49a7e') }),
-    plastic: phys('#e3e0da', 0.42, 0, { clearcoat: 0.15, clearcoatRoughness: 0.5 }),
-    bezel: phys('#dcd9d3', 0.36, 0, { clearcoat: 0.2 }),
+    seatFabric: (() => {
+      const m = fabric('#ffffff', '#cfe4ec');
+      m.map = economyFabricMap();
+      return m;
+    })(),
+    // business: cream leather, diamond quilted
+    seatFabricBiz: phys('#e6dac4', 0.5, 0, { clearcoat: 0.2, clearcoatRoughness: 0.45, bumpMap: quiltBump(7), bumpScale: 1.4, sheen: 0.4, sheenColor: new Color('#fff4e2') }),
+    // premium economy: cream quilted leather as in the references
+    seatFabricFirst: phys('#ece2cf', 0.5, 0, { clearcoat: 0.2, clearcoatRoughness: 0.45, bumpMap: quiltBump(9), bumpScale: 1.4, sheen: 0.4, sheenColor: new Color('#fff6e6') }),
+    leather: phys('#e8dcc6', 0.46, 0, { clearcoat: 0.25, clearcoatRoughness: 0.4, bumpMap: quiltBump(6), bumpScale: 1.2, sheen: 0.4, sheenColor: new Color('#fff2dc') }),
+    plastic: phys('#e9e1d2', 0.42, 0, { clearcoat: 0.15, clearcoatRoughness: 0.5 }),
+    bezel: phys('#d6c8af', 0.3, 0.35, { clearcoat: 0.3 }),
     galley: phys('#c9ccd0', 0.3, 1, { anisotropy: 0.7 }),
     cockpitPanel: std('#4f5862', 0.72, 0.05, { roughnessMap: noise }),
     cockpitTrim: std('#23272c', 0.55, 0.15),

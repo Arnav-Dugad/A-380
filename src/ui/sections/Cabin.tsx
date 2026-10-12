@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { firstPerson } from '../../camera/FirstPerson';
-import { CLASS_NAMES, cabinActions, useCabin, type Deck } from '../../interior/CabinScene';
+import { CLASS_NAMES, cabinActions, useCabin, type Deck, type Shades } from '../../interior/CabinScene';
 import { systems, type CabinLight } from '../../sim/systems';
 import { useSim } from '../../state/sim';
 import { Button, Group, Label, ScrollArea, SectionTitle, Segmented, cx } from '../kit';
@@ -43,6 +43,7 @@ function SeatMap({ deck }: { deck: Deck }) {
 }
 
 export function CabinPanel() {
+  const shades = useCabin((s) => s.shades);
   const touch = useTouch();
   const deck = useCabin((s) => s.deck);
   const seat = useCabin((s) => s.seat);
@@ -129,6 +130,19 @@ export function CabinPanel() {
             { value: 'night', label: 'Night' },
             { value: 'ambient', label: 'Mood' },
             { value: 'off', label: 'Off' },
+          ]}
+        />
+      </Group>
+      <Group label="Window shades">
+        <Segmented<Shades>
+          size="sm"
+          value={shades}
+          onChange={(v) => useCabin.setState({ shades: v })}
+          options={[
+            { value: 'mixed', label: 'As left' },
+            { value: 'open', label: 'Open' },
+            { value: 'half', label: 'Half' },
+            { value: 'closed', label: 'Closed' },
           ]}
         />
       </Group>

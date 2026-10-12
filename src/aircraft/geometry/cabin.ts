@@ -102,6 +102,8 @@ interface SeatTemplate {
   fabric: () => BufferGeometry;
   shell: () => BufferGeometry;
   screen: () => BufferGeometry;
+  /** headrest cover and pillow */
+  accent: () => BufferGeometry;
   fabricMat: MaterialKey;
   shellMat: MaterialKey;
 }
@@ -154,6 +156,14 @@ function economySeat(width: number, backDeg: number, scale = 1): SeatTemplate {
         rbox([0.02, 0.27, 0], [0.24, 0.06, w * 0.7], 0.02), // life-vest pouch
       ]),
     screen: () => quadAft(onTilted(shellC, -0.039, 0.17 * scale, r), 0.24, 0.145, r),
+    accent: () =>
+      merge([
+        // slip-on headrest cover draped over the front and top of the headrest
+        rbox(onTilted(back, -0.045, 0.43 * scale, r), [0.012, 0.13, w * 0.6], 0.005, r),
+        rbox(onTilted(back, -0.1, 0.484 * scale, r), [0.1, 0.012, w * 0.6], 0.005, r),
+        // pillow resting against the backrest
+        rbox(onTilted(back, 0.115, -0.09 * scale, r), [0.09, 0.27, w * 0.6], 0.045, r * 0.6, 0, 0, 0.3),
+      ]),
   };
 }
 
@@ -161,6 +171,7 @@ const TEMPLATES: Record<CabinClass, SeatTemplate> = {
   economy: economySeat(0.46, 12),
   premium: (() => {
     const t = economySeat(0.52, 15, 1.08);
+    t.fabricMat = 'seatFabricFirst'; // cream quilted leather
     const fabric = t.fabric;
     // calf rest under the cushion front
     t.fabric = () => merge([fabric(), rbox([0.36, 0.3, 0], [0.06, 0.24, 0.44], 0.025, 0.55)]);
@@ -178,6 +189,11 @@ const TEMPLATES: Record<CabinClass, SeatTemplate> = {
           rbox(back, [0.13, 0.78, 0.54], 0.055, r, 0, 0, 0.4),
           rbox(onTilted(back, -0.08, 0.46, r), [0.12, 0.2, 0.42], 0.06, r),
           rbox([0.74, 0.62, 0], [0.32, 0.08, 0.5], 0.035), // ottoman cushion
+        ]),
+      accent: () =>
+        merge([
+          rbox(onTilted(back, 0.075, 0.47, r), [0.02, 0.2, 0.36], 0.009, r),
+          rbox(onTilted(back, 0.13, -0.06, r), [0.11, 0.3, 0.42], 0.05, r * 0.6, 0, 0, 0.3),
         ]),
       shell: () =>
         merge([
@@ -208,6 +224,12 @@ const TEMPLATES: Record<CabinClass, SeatTemplate> = {
           rbox([0.05, 0.66, 0.4], [0.7, 0.12, 0.12], 0.05), // armrests
           rbox([0.05, 0.66, -0.4], [0.7, 0.12, 0.12], 0.05),
         ]),
+      accent: () =>
+        merge([
+          rbox(onTilted(back, 0.09, 0.52, r), [0.02, 0.2, 0.42], 0.009, r),
+          rbox(onTilted(back, 0.14, -0.04, r), [0.12, 0.32, 0.5], 0.055, r * 0.6, 0, 0, 0.3),
+          rbox(onTilted(back, 0.14, -0.04, r, 0.2), [0.1, 0.24, 0.24], 0.05, r * 0.6, 0.3), // second, smaller pillow
+        ]),
       shell: () =>
         merge([
           rbox([0, 0.24, 0], [0.9, 0.44, 0.6], 0.04),
@@ -223,10 +245,10 @@ const TEMPLATES: Record<CabinClass, SeatTemplate> = {
   })(),
 };
 
-function seatInstances(cls: CabinClass, seats: SeatRecord[], part: 'fabric' | 'shell' | 'screen'): InstancedMesh {
+function seatInstances(cls: CabinClass, seats: SeatRecord[], part: 'fabric' | 'shell' | 'screen' | 'accent'): InstancedMesh {
   const list = seats.filter((s) => s.cls === cls);
   const t = TEMPLATES[cls];
-  const key: MaterialKey = part === 'fabric' ? t.fabricMat : part === 'shell' ? t.shellMat : 'ifeScreen';
+  const key: MaterialKey = part === 'fabric' ? t.fabricMat : part === 'shell' ? t.shellMat : part === 'accent' ? 'cushion' : 'ifeScreen';
   const im = new InstancedMesh(t[part](), mat(key), list.length);
   im.name = `seats_${cls}_${part}`;
   im.userData.partId = 'seats';
@@ -448,6 +470,136 @@ function ceilingLights(deck: keyof typeof DECKS): BufferGeometry {
   return merge(parts);
 }
 
+/**
+ * Bar lounge across the aft upper deck: a curved counter with a stone top and a chrome foot
+ * rail, a back bar of lit glass shelves with bottles, an overhead lighting ring and wrap-around
+ * leather settees either side.
+ */
+function barLounge(s0: number, s1: number): { wood: BufferGeometry; top: BufferGeometry; metal: BufferGeometry; bottles: BufferGeometry; sofas: BufferGeometry; glow: BufferGeometry } {
+  const f = UPPER_DECK_FLOOR;
+  const sc = (s0 + s1) / 2;
+  const wood: BufferGeometry[] = [];
+  const top: BufferGeometry[] = [];
+  const metal: BufferGeometry[] = [];
+  const bottles: BufferGeometry[] = [];
+  const sofas: BufferGeometry[] = [];
+  const glow: BufferGeometry[] = [];
+  // counter: a horseshoe opening forward, centred on the aisle
+  const R = 1.25;
+  const n = 26;
+  for (let k = 0; k < n; k++) {
+    const a0 = -Math.PI * 0.85 + (k / n) * Math.PI * 1.7;
+    const a1 = -Math.PI * 0.85 + ((k + 1) / n) * Math.PI * 1.7;
+    const am = (a0 + a1) / 2;
+    const seg = 2 * R * Math.sin((a1 - a0) / 2) + 0.01;
+    const c = (r: number, y: number): Vec3 => [sx(sc - 0.4) + Math.cos(am) * r, y, Math.sin(am) * r];
+    wood.push(box(c(R, f + 0.5), [0.06, 1.0, seg], -am, 0, 0));
+    top.push(box(c(R - 0.1, f + 1.03), [0.42, 0.04, seg * 1.08], -am, 0, 0));
+    metal.push(box(c(R + 0.12, f + 0.18), [0.03, 0.03, seg * 1.1], -am, 0, 0));
+    glow.push(box(c(R + 0.04, f + 0.97), [0.02, 0.025, seg], -am, 0, 0)); // under-counter LED
+  }
+  // back bar against the aft wall: panelling, glass shelves and bottles
+  const back = sx(s1 - 0.12);
+  wood.push(box([back, f + 1.1, 0], [0.12, 2.2, 2.0]));
+  for (const y of [1.2, 1.5, 1.8]) {
+    top.push(box([back + 0.17, f + y, 0], [0.24, 0.012, 1.4]));
+    glow.push(box([back + 0.07, f + y + 0.12, 0], [0.01, 0.22, 1.36]));
+    for (let k = 0; k < 9; k++) {
+      const z = -0.6 + k * 0.15;
+      const h = 0.18 + ((k * 7) % 5) * 0.025;
+      bottles.push(cylinder([back + 0.17, f + y + 0.006, z], [back + 0.17, f + y + h, z], 0.035, 10, 0.03), cylinder([back + 0.17, f + y + h, z], [back + 0.17, f + y + h + 0.07, z], 0.013, 8));
+    }
+  }
+  // lighting ring above the counter
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    glow.push(cylinder([sx(sc - 0.4) + Math.cos(a) * 1.0, f + 2.2, Math.sin(a) * 1.0], [sx(sc - 0.4) + Math.cos(a) * 1.0, f + 2.19, Math.sin(a) * 1.0], 0.07, 12));
+  }
+  metal.push(box([sx(sc - 0.4), f + 2.23, 0], [2.3, 0.04, 2.3]));
+  // settees along both sidewalls with backs and armrests
+  for (const side of [1, -1] as const) {
+    const z = side * 1.85;
+    sofas.push(rbox([sx(sc), f + 0.24, z], [3.2, 0.48, 0.62], 0.08));
+    sofas.push(rbox([sx(sc), f + 0.62, z + side * 0.27], [3.2, 0.5, 0.14], 0.06));
+    for (const ds of [-1.6, 1.6]) sofas.push(rbox([sx(sc + ds), f + 0.5, z], [0.14, 0.32, 0.62], 0.05));
+    wood.push(box([sx(sc), f + 0.98, z + side * 0.38], [3.3, 0.04, 0.12])); // wood shelf cap behind the settee
+  }
+  return { wood: merge(wood), top: merge(top), metal: merge(metal), bottles: merge(bottles), sofas: merge(sofas), glow: merge(glow) };
+}
+
+/** Trolleys stowed under the galley worktops, with handles and latch flaps. */
+function galleyCarts(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const bank = (sFace: number, dir: 1 | -1, deck: keyof typeof DECKS, z0: number, z1: number) => {
+    const f = DECKS[deck].floor;
+    for (let z = z0 + 0.17; z < z1 - 0.15; z += 0.32) {
+      const s = sFace + dir * 0.42;
+      parts.push(rbox([sx(s), f + 0.53, z], [0.8, 1.02, 0.3], 0.015));
+      parts.push(cylinder([sx(sFace + dir * 0.015), f + 0.98, z - 0.1], [sx(sFace + dir * 0.015), f + 0.98, z + 0.1], 0.012, 8));
+      parts.push(box([sx(sFace + dir * 0.003), f + 0.75, z], [0.006, 0.08, 0.06]));
+    }
+  };
+  bank(12.5, -1, 'main', -2.4, -0.75);
+  bank(12.5, -1, 'main', 0.75, 2.4);
+  bank(57.3, 1, 'main', -2.2, -0.75);
+  bank(57.3, 1, 'main', 0.75, 2.2);
+  bank(55.8, 1, 'upper', -2.0, -0.75);
+  return merge(parts);
+}
+
+/** EXIT signs above each door and at the class partitions. */
+function exitSigns(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const [list, deck] of [
+    [DOORS.main, 'main'],
+    [DOORS.upper, 'upper'],
+  ] as const)
+    for (const d of list) {
+      const c = DECKS[deck].ceil - 0.18;
+      for (const side of [1, -1] as const) parts.push(box([sx(d.s), c, side * (deck === 'main' ? 2.2 : 1.8)], [0.32, 0.12, 0.03]));
+      parts.push(box([sx(d.s + 0.6), c + 0.05, 0], [0.03, 0.12, 0.34]));
+    }
+  return merge(parts);
+}
+
+/** Floor-path emergency lighting along the aisles. */
+function pathLights(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const [deck, aisles] of [
+    ['main', [-1.26, 1.26]],
+    ['upper', [-1.24, 1.24]],
+  ] as const) {
+    const d = DECKS[deck];
+    for (const z of aisles) for (const dz of [-0.3, 0.3]) parts.push(box([sx((d.s0 + d.s1) / 2), d.floor + 0.012, z + dz], [d.s1 - d.s0 - 2, 0.008, 0.015]));
+  }
+  return merge(parts);
+}
+
+/** Class-divider curtains drawn across the aisles: hanging panels with soft vertical folds. */
+function curtains(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const panel = (s: number, deck: keyof typeof DECKS, zc: number, w: number) => {
+    const d = DECKS[deck];
+    const h = d.ceil - d.floor - 0.12;
+    const folds = 10;
+    const g = gridSurface(folds * 4, 6, (i, j) => {
+      const t = i / (folds * 4);
+      return [sx(s) + Math.sin(t * folds * Math.PI * 2) * 0.035, d.floor + 0.04 + (j / 6) * h, zc - w / 2 + t * w];
+    });
+    parts.push(g, flipGeometry(g.clone()));
+    parts.push(cylinder([sx(s), d.ceil - 0.06, zc - w / 2 - 0.05], [sx(s), d.ceil - 0.06, zc + w / 2 + 0.05], 0.012, 8));
+  };
+  for (const z of [-1.26, 1.26]) {
+    panel(21.15, 'main', z, 0.62);
+    panel(31.05, 'main', z, 0.62);
+  }
+  for (const z of [-1.24, 1.24]) {
+    panel(29.65, 'upper', z, 0.6);
+    panel(38.65, 'upper', z, 0.6);
+  }
+  return merge(parts);
+}
+
 /** `quality` < 1 builds the lighter cabin used on phones (single-segment rounding). */
 export function buildCabin(quality = 1): Group {
   setRoundingDetail(quality);
@@ -457,6 +609,7 @@ export function buildCabin(quality = 1): Group {
     g.add(seatInstances(cls, seats, 'fabric'));
     g.add(seatInstances(cls, seats, 'shell'));
     g.add(seatInstances(cls, seats, 'screen'));
+    g.add(seatInstances(cls, seats, 'accent'));
   }
   g.userData.seatMap = seats.map((s) => [s.id, s.deck, s.cls, s.row, s.letter, +s.s.toFixed(3), s.z, s.window ? 1 : 0, s.facing]);
 
@@ -466,7 +619,7 @@ export function buildCabin(quality = 1): Group {
     g.add(mesh(`floor_${deck}`, floorPanel(deck), 'carpet', 'cabinInterior'));
     g.add(mesh(`endwalls_${deck}`, merge([endWall(deck, d.s0), endWall(deck, d.s1)]), 'cabinWall', 'cabinInterior'));
     const wr = windowReveals(deck);
-    g.add(mesh(`window_bezels_${deck}`, wr.bezel, 'bezel', 'cabinInterior'));
+    g.add(mesh(`window_bezels_${deck}`, wr.bezel, 'wood', 'cabinInterior'));
     g.add(mesh(`windows_inner_${deck}`, wr.pane, 'emissiveCabin', 'cabinInterior'));
     g.add(mesh(`window_shades_${deck}`, wr.shade, 'plastic', 'cabinInterior'));
     g.add(mesh(`ceiling_lights_${deck}`, ceilingLights(deck), 'emissiveCabin', 'cabinInterior'));
@@ -532,6 +685,18 @@ export function buildCabin(quality = 1): Group {
     monument(38.6, 38.7, 'upper', 0.8, 2.5, 1.5),
   ]);
   g.add(mesh('partitions', partitions, 'cabinWall', 'cabinInterior'));
+  // Upper-deck bar lounge, galley carts, exit signs, floor-path lighting and class curtains
+  const bar = barLounge(51.7, 55.5);
+  g.add(mesh('bar_wood', bar.wood, 'wood', 'bar'));
+  g.add(mesh('bar_counter', bar.top, 'marble', 'bar'));
+  g.add(mesh('bar_metal', bar.metal, 'chrome', 'bar'));
+  g.add(mesh('bar_bottles', bar.bottles, 'bottle', 'bar'));
+  g.add(mesh('bar_sofas', bar.sofas, 'leather', 'bar'));
+  g.add(mesh('ceiling_lights_bar', bar.glow, 'emissiveCabin', 'bar'));
+  g.add(mesh('galley_carts', galleyCarts(), 'galley', 'galley'));
+  g.add(mesh('exit_signs', exitSigns(), 'exitSign', 'cabinInterior'));
+  g.add(mesh('path_lights', pathLights(), 'pathLight', 'cabinInterior'));
+  g.add(mesh('curtains', curtains(), 'curtain', 'cabinInterior'));
   // Staircases: forward (between M1 and M2 zone) and aft
   g.add(mesh('stairs_forward', stairs(8.9, 1, 0), 'galley', 'stairs'));
   g.add(mesh('stairs_aft', stairs(59.9, -1, 0), 'galley', 'stairs'));

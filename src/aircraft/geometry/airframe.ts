@@ -278,10 +278,11 @@ function skinST(s: number, th: number, off = 0): { p: Vec3; n: Vec3 } {
   return { p: [p[0] + n[0] * off, p[1] + n[1] * off, p[2] + n[2] * off], n };
 }
 
-/** Windshield wipers parked along the lower edge of each windshield. */
-function wipers(): BufferGeometry {
-  const parts: BufferGeometry[] = [];
+/** Windshield wipers parked along the lower edge of each windshield, hinged at their bosses. */
+function wipers(): Group[] {
+  const out: Group[] = [];
   for (const mirror of [false, true]) {
+    const parts: BufferGeometry[] = [];
     const th = (deg_: number) => (mirror ? Math.PI - deg(deg_) : deg(deg_));
     const pivot = skinST(3.52, th(60.5), 0.03);
     const pts = [0, 0.33, 0.66, 1].map((t) => skinST(3.5 - 0.3 * t, th(60.5 + 26 * t), 0.035));
@@ -290,8 +291,11 @@ function wipers(): BufferGeometry {
     for (let k = 0; k < 2; k++) parts.push(strip(pts[k]!.p, pts[k + 1]!.p, pts[k]!.n, 0.022, 0.012));
     const blade = [0.15, 0.5, 0.85, 1].map((t) => skinST(3.47 - 0.3 * t, th(61 + 26 * t), 0.024));
     for (let k = 0; k < 3; k++) parts.push(strip(blade[k]!.p, blade[k + 1]!.p, blade[k]!.n, 0.014, 0.01));
+    const name = `wiper_${mirror ? 'L' : 'R'}`;
+    // sweeps about the boss axis (the skin normal) up across the glass
+    out.push(pivoted(name, pivot.p, [mesh(`${name}_arm`, merge(parts), 'darkMetal', 'cockpitWindows')], { kind: 'hinge', axis: mirror ? pivot.n : [-pivot.n[0], -pivot.n[1], -pivot.n[2]], min: 0, max: 70 }, 'cockpitWindows'));
   }
-  return merge(parts);
+  return out;
 }
 
 /** Outflow valves on the aft lower fuselage: dark recess with louvres. */
@@ -370,7 +374,7 @@ export function buildAirframe(quality: number): Group {
   const ov = outflowValves();
   root.add(mesh('outflow_valves', ov.recess, 'seal', 'fuselage'));
   root.add(mesh('outflow_louvres', ov.louvres, 'darkMetal', 'fuselage'));
-  root.add(mesh('windshield_wipers', wipers(), 'darkMetal', 'cockpitWindows'));
+  for (const w of wipers()) root.add(w);
   root.add(mesh('light_lenses', lightLenses(), 'lens', 'fuselage'));
   // drain masts under the keel join the antennas
   const antennas = merge([blade(14.5, true), blade(27.0, true, 0.32, 0.45), blade(46.5, true, 0.36), blade(11.0, false), blade(33.0, false, 0.3, 0.45), blade(14.2, false, 0.2, 0.28), blade(56.2, false, 0.2, 0.28)]);

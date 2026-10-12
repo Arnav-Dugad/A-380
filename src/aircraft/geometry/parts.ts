@@ -14,6 +14,15 @@ export type MaterialKey =
   | 'liner' // acoustic liner inside the engine inlet
   | 'spinner' // fan spinner with its painted spiral
   | 'lens' // clear light covers
+  | 'cushion' // headrest covers and pillows (printed fabric)
+  | 'wood' // wood-veneer window surrounds and bar panelling
+  | 'marble' // bar counter top
+  | 'bottle' // back-lit bottles and glassware
+  | 'exitSign' // illuminated EXIT signs
+  | 'pathLight' // floor-path emergency lighting strips
+  | 'curtain' // class-divider curtains
+  | 'sheepskin' // flight-crew seat covers
+  | 'visor' // tinted sun visors
   | 'paint' // other painted skin
   | 'paintBelly' // grey composite belly & wing lower surfaces
   | 'paintTail' // livery colour on the fin

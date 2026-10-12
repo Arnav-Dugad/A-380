@@ -4,8 +4,8 @@
  * presets driven by the shared systems state.
  */
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { Color, InstancedMesh, MeshStandardMaterial, type Group, type PointLight } from 'three';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Color, InstancedMesh, MeshStandardMaterial, type Group, type Mesh, type PointLight } from 'three';
 import { LazyLayer } from '../aircraft/Layers';
 import { getMaterials } from '../aircraft/materials';
 import { CABIN_DECKS, ZONES, type CabinClass } from '../aircraft/geometry/cabin';
@@ -31,7 +31,59 @@ export interface Seat {
   facing: 1 | -1;
 }
 
-export const useCabin = create<{ deck: Deck; seat: Seat | null; seated: boolean; seats: Seat[] }>(() => ({ deck: 'main', seat: null, seated: false, seats: [] }));
+export type Shades = 'mixed' | 'open' | 'half' | 'closed';
+export const useCabin = create<{ deck: Deck; seat: Seat | null; seated: boolean; seats: Seat[]; shades: Shades }>(() => ({ deck: 'main', seat: null, seated: false, seats: [], shades: 'mixed' }));
+
+const SHADE_DROP: Record<Exclude<Shades, 'mixed'>, number> = { open: 0.02, half: 0.19, closed: 0.37 };
+
+/**
+ * Window shades: every shade is a quad whose top edge is fixed; the bottom edge slides along
+ * the window to the chosen drop (or back to the varied heights passengers left them at).
+ */
+function CabinShades({ root }: { root: Group }) {
+  const data = useMemo(() => {
+    const list: { pos: import('three').BufferAttribute; orig: Float32Array; geo: import('three').BufferGeometry }[] = [];
+    root.traverse((o) => {
+      if (!o.name.startsWith('window_shades')) return;
+      const geo = (o as Mesh).geometry;
+      const pos = geo.getAttribute('position') as import('three').BufferAttribute;
+      list.push({ pos, orig: Float32Array.from(pos.array as Float32Array), geo });
+    });
+    return list;
+  }, [root]);
+  const k = useRef(0);
+  const dirty = useRef(false);
+  useFrame((_, dt) => {
+    const mode = useCabin.getState().shades;
+    k.current = mode === 'mixed' ? Math.max(0, k.current - dt) : Math.min(1, k.current + dt);
+    if (mode === 'mixed' && k.current === 0 && !dirty.current) return;
+    dirty.current = k.current > 0;
+    for (const d of data) {
+      const a = d.pos.array as Float32Array;
+      for (let q = 0; q + 3 < d.pos.count; q += 4) {
+        for (const [b, t] of [
+          [2, 1],
+          [3, 0],
+        ] as const) {
+          const ti = (q + t) * 3;
+          const bi = (q + b) * 3;
+          const dx = d.orig[bi]! - d.orig[ti]!;
+          const dy = d.orig[bi + 1]! - d.orig[ti + 1]!;
+          const dz = d.orig[bi + 2]! - d.orig[ti + 2]!;
+          const len = Math.hypot(dx, dy, dz) || 1;
+          const want = mode === 'mixed' ? len : SHADE_DROP[mode];
+          const drop = len + (want - len) * k.current;
+          a[bi] = d.orig[ti]! + (dx / len) * drop;
+          a[bi + 1] = d.orig[ti + 1]! + (dy / len) * drop;
+          a[bi + 2] = d.orig[ti + 2]! + (dz / len) * drop;
+        }
+      }
+      d.pos.needsUpdate = true;
+      d.geo.computeBoundingSphere();
+    }
+  });
+  return null;
+}
 
 export const CLASS_NAMES: Record<CabinClass, string> = {
   first: 'First',
@@ -252,7 +304,12 @@ export function CabinScene() {
       <Suspense fallback={null}>
         <LazyLayer name="cabin" visible={active || showInXray} onReady={onReady} />
       </Suspense>
-      {root && (active || showInXray) && <CabinLighting root={root} />}
+      {root && (active || showInXray) && (
+        <>
+          <CabinShades root={root} />
+          <CabinLighting root={root} />
+        </>
+      )}
     </group>
   );
 }

@@ -7,7 +7,8 @@ import { getRig } from '../aircraft/rig';
 import { useUI } from '../state/ui';
 import { systems } from '../sim/systems';
 import { firstPerson } from '../camera/FirstPerson';
-import { Box3, Vector3 } from 'three';
+import { cabinActions } from '../interior/CabinScene';
+import { Box3, Raycaster, Vector2, Vector3 } from 'three';
 import { flight } from '../sim/flight';
 import { perf } from '../perf/PerfProbe';
 import { useRender } from '../render/renderState';
@@ -71,6 +72,29 @@ export function installBridge(): void {
     },
     flight,
     perf,
-    extra: { firstPerson },
+    extra: {
+      firstPerson,
+      cabinActions,
+      /** set the orbit camera's lens (degrees) */
+      fov: (deg: number) => {
+        const cam = getControls()?.camera as import('three').PerspectiveCamera | undefined;
+        if (!cam) return;
+        cam.fov = deg;
+        cam.updateProjectionMatrix();
+        const c = getControls();
+        if (c) c.maxDistance = 5000;
+      },
+      /** names of the meshes under a screen point (CSS px), nearest first */
+      pick: (x: number, y: number) => {
+        const c = getControls();
+        const el = document.querySelector('canvas');
+        const root = getRig()?.roots[0]?.parent?.parent;
+        if (!c || !el || !root) return [];
+        const r = el.getBoundingClientRect();
+        const ray = new Raycaster();
+        ray.setFromCamera(new Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), c.camera);
+        return ray.intersectObjects([root], true).slice(0, 5).map((h) => `${h.object.name} (${h.distance.toFixed(2)} m)`);
+      },
+    },
   };
 }

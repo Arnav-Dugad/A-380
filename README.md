@@ -23,6 +23,30 @@ model lets you fly it.
 | **Flight** | Ten scenarios from cold & dark to landing, protected or direct control law, autopilot and autothrust, weather and time of day, five cameras, HUD, replay; keyboard and gamepad |
 | **Specifications** | Published data, each value marked verified, approximation or unverified, with its source |
 
+## Rendering and tools
+
+- **Viewport shading** like a modelling application (`Z` cycles, `Shift+Z` wireframe):
+  Wireframe, Solid (clay), Material (real time) and **Rendered**: an unbiased GPU path tracer
+  with global illumination, soft shadows, true reflections, optional thin-lens depth of field
+  with click-to-focus, an edge-aware denoiser, AgX/ACES/Neutral tone mapping and PNG export
+  up to 4K with a transparent background. Baked-occlusion and normal passes help inspect the
+  geometry.
+- **Tools** (grid icon in the top bar): outliner with visibility toggles, measuring tape,
+  annotation pins, saved views with thumbnails, share links that carry the whole view in the
+  URL, a reference-image overlay for comparing proportions, turntable and free video capture,
+  WebXR (VR at true scale, AR at 1:40) and a nine-chapter guided story.
+- **Numpad views** as in Blender: `1`/`3`/`7` front, side, top (`Ctrl` for the opposite),
+  `2 4 6 8` orbit, `5` orthographic, `0` hero, `.` frame selection. `M` opens the measuring tape.
+
+## Living details
+
+Wings bend under load (and droop on the ground with full tanks), loaded tyres flatten at the
+contact patch, engine exhaust shimmers, landing lights cast visible beams at night, tyres
+smoke and leave rubber on touchdown, contrails form at cruise altitude and the camera shakes
+on the runway. On the apron, boarding bridges dock and retract, bags ride the belt loaders
+into open holds, a tug pushes the aircraft back onto the taxilane and the evacuation slides
+inflate from armed doors. In rain the wipers run and droplets stream across the windshield.
+
 ## On phones and tablets
 
 The interface adapts to the device:
@@ -66,9 +90,13 @@ The A380 is generated procedurally from published dimensions and the Airbus thre
 `scripts/build-aircraft.ts` exports the geometry as meshopt-compressed glTF in three LODs
 (about 1 M triangles at the top tier). Each vertex carries ray-traced ambient occlusion,
 baked at build time. On the screen, the aircraft is lit by CC0 HDR panoramas and uses
-physically based materials: clear-coated paint with light weathering, polished inlet lips,
-anisotropic metals, rubber and glazing. Inside, the seats are upholstered and woven fabric
-has sheen.
+physically based materials: clear-coated paint, polished inlet lips, anisotropic metals,
+rubber and glazing. The skin carries procedural texture atlases painted in a web worker at up
+to 8192 × 2048: panel joints, rivet rows and oil-canning in the normal maps, door and service
+stencils, NO STEP and walkway markings, leading-edge erosion, exhaust soot, keel grime and
+tyre sidewall lettering. Inside, cream quilted leather, patterned economy fabric, printed
+headrest covers and pillows, walnut window surrounds and an upper-deck bar lounge follow
+photographs of a contemporary A380 cabin (with fictional branding).
 Every moving part is a separate node carrying its hinge axis and limits. See
 [docs/ASSETS.md](docs/ASSETS.md) for why no third-party model is redistributed.
 
@@ -96,6 +124,9 @@ Every moving part is a separate node carrying its hinge axis and limits. See
 | `L` | Exterior lights |
 | `C` | Cinematic tour |
 | `P` | Photo mode |
+| `Z` / `Shift+Z` | Shading: solid / material / rendered · wireframe |
+| `Numpad 1 3 7 5` | Front / side / top views · orthographic |
+| `M` | Measure |
 | `?` | Help |
 | `Esc` | Clear selection or exit the current mode |
 

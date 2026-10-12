@@ -38,7 +38,8 @@ export interface Autopilot {
 
 export const autopilot: Autopilot = { ap: false, athr: false, spd: 150, hdg: 90, alt: 5000, vs: 1500, lateral: '', vertical: '' };
 
-export const displayState = { sdPage: 'ENG' as SdPage, autoSd: true, brightness: 1, ndRange: 40 };
+/** `integral`: 1 when the panel integral lighting is on (dark conditions). */
+export const displayState = { sdPage: 'ENG' as SdPage, autoSd: true, brightness: 1, ndRange: 40, integral: 0 };
 
 const SIZE: Record<ScreenName, [number, number]> = {
   PFD_C: [384, 512],
@@ -661,25 +662,126 @@ const OVHD_ROWS: [string, string[]][] = [
   ['EXT LT', ['LAND', 'TAXI', 'WING']],
   ['SIGNS · INT LT', ['SEAT BELTS', 'CABIN LT', 'DOME']],
 ];
-function drawOverhead(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  // u: 0..1 left→right (port→starboard); v: 0 at aft edge (bottom), 1 at forward edge (top)
+const LEFT_PANELS = ['ADIRS', 'F/CTL', 'EVAC', 'EMER ELEC', 'GPWS', 'RCDR', 'OXYGEN', 'CALLS', 'WIPER'];
+const RIGHT_PANELS = ['CARGO SMOKE', 'VENT', 'ENG', 'FUEL', 'HYD', 'AIR', 'ANTI ICE', 'CAB PRESS', 'INT LT'];
+const PB_TOP = ['FAULT', 'FAULT', 'FAULT', 'FAULT', 'LO', 'FAULT'];
+const PB_BOT = ['OFF', 'ON', 'OFF', 'AUTO', 'OFF', 'ALTN'];
+
+/**
+ * Overhead panel face. The decorative switch field in the cockpit geometry is placed by a
+ * seeded sequence; the same sequence is replayed here so every annunciator outline, knob scale
+ * and legend sits under its physical switch. By day the legends are engraved paint; at night
+ * the integral lighting makes them glow warm white, with the synoptic flow lines in green and
+ * yellow, as in photographs of the A380 overhead.
+ */
+function drawOverhead(ctx: CanvasRenderingContext2D, w: number, h: number, s: SystemsState) {
+  const night = displayState.integral;
   const sA = 4.35;
   const sB = 6.3;
-  const vOf = (s: number) => 1 - (s - (sA + 0.05)) / (sB - 0.05 - (sA + 0.05));
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-  ctx.lineWidth = 2;
+  const vOf = (st: number) => 1 - (st - (sA + 0.05)) / (sB - 0.05 - (sA + 0.05));
+  const X = (z: number) => (0.5 + z / 0.96) * w;
+  const Y = (st: number) => (1 - vOf(st)) * h;
+  const kx = w / 0.96;
+  const legend = night > 0.5 ? '#ffd38a' : '#e9ebed';
+  const dim = night > 0.5 ? 'rgba(255,211,138,0.35)' : 'rgba(233,235,237,0.55)';
+  ctx.fillStyle = night > 0.5 ? '#15181c' : '#4a5158';
+  ctx.fillRect(0, 0, w, h);
+  if (night > 0.5) {
+    ctx.shadowColor = 'rgba(255,190,90,0.6)';
+    ctx.shadowBlur = 4;
+  }
+  // replay the switch-field sequence (see overheadField in the cockpit geometry)
+  let seed = 17;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let row = 0; row < 9; row++) {
+    const st = sA + 0.12 + ((sB - 0.12 - (sA + 0.12)) * row) / 8;
+    const y = Y(st);
+    for (const [side, zc] of [
+      [0, -0.36],
+      [1, 0.36],
+    ] as const) {
+      // sub-panel outline and title
+      ctx.strokeStyle = night > 0.5 ? 'rgba(255,211,138,0.25)' : 'rgba(20,22,25,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(X(zc - 0.13), y - 0.09 * kx * 0.55, 0.26 * kx, 0.18 * kx * 0.55);
+      txt(ctx, (side === 0 ? LEFT_PANELS : RIGHT_PANELS)[row]!, X(zc), y - 0.075 * kx * 0.55, legend, 10, 'center', 700);
+      const n = 3 + Math.floor(rnd() * 3);
+      const pts: number[] = [];
+      for (let k = 0; k < n; k++) {
+        const z = zc - 0.1 + (0.2 * k) / Math.max(1, n - 1);
+        const kind = rnd();
+        const x = X(z);
+        pts.push(x);
+        if (kind < 0.5) {
+          // push-button annunciator: upper legend (fault, amber), lower legend (state)
+          const b = 0.03 * kx;
+          ctx.fillStyle = '#0e0f11';
+          ctx.fillRect(x - b / 2, y - b / 2, b, b);
+          const lit = (row * 7 + k * 3 + side) % 5;
+          const powered = s.elec.ac || s.elec.dc;
+          const top = PB_TOP[(row + k) % PB_TOP.length]!;
+          const bot = PB_BOT[(row * 2 + k) % PB_BOT.length]!;
+          txt(ctx, top, x, y - b * 0.18, powered && lit === 0 ? '#ffb21e' : 'rgba(120,120,120,0.5)', 5.5, 'center', 700);
+          const botCol = !powered ? 'rgba(120,120,120,0.5)' : bot === 'ON' || bot === 'AUTO' ? (lit < 3 ? '#5ab4ff' : 'rgba(120,120,120,0.5)') : lit === 1 ? '#f2f4f6' : 'rgba(120,120,120,0.5)';
+          txt(ctx, bot, x, y + b * 0.26, botCol, 5.5, 'center', 700);
+          txt(ctx, ['PUMP', 'GEN', 'VALVE', 'BUS', 'XFR', 'MODE', 'SEL'][(row + k + side) % 7]!, x, y - b * 0.95, legend, 6.5, 'center', 600);
+        } else if (kind < 0.8) {
+          // toggle switch positions
+          txt(ctx, 'ON', x, y - 0.03 * kx, dim, 6, 'center', 600);
+          txt(ctx, 'OFF', x, y + 0.035 * kx, dim, 6, 'center', 600);
+        } else {
+          // rotary selector scale
+          ctx.strokeStyle = dim;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(x, y, 0.024 * kx, Math.PI * 0.8, Math.PI * 2.2);
+          ctx.stroke();
+          for (let t = 0; t < 5; t++) {
+            const a = Math.PI * 0.8 + (t / 4) * Math.PI * 1.4;
+            ctx.beginPath();
+            ctx.moveTo(x + Math.cos(a) * 0.024 * kx, y + Math.sin(a) * 0.024 * kx);
+            ctx.lineTo(x + Math.cos(a) * 0.03 * kx, y + Math.sin(a) * 0.03 * kx);
+            ctx.stroke();
+          }
+        }
+      }
+      // synoptic flow line through the row (hydraulic, fuel, air and electrical panels)
+      if (['HYD', 'FUEL', 'AIR', 'ELEC', 'ENG', 'EMER ELEC'].includes((side === 0 ? LEFT_PANELS : RIGHT_PANELS)[row]!)) {
+        ctx.strokeStyle = night > 0.5 ? (row % 2 ? '#a6ff4d' : '#ffd84d') : 'rgba(240,240,240,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pts[0]!, y + 0.022 * kx);
+        ctx.lineTo(pts[pts.length - 1]!, y + 0.022 * kx);
+        for (const px of pts) {
+          ctx.moveTo(px, y + 0.022 * kx);
+          ctx.lineTo(px, y + 0.017 * kx);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  // printed legends for the operable centre-column buttons
   OVHD_ROWS.forEach(([title, labels], r) => {
-    const s = sA + 0.25 + ((sB - 0.35 - (sA + 0.25)) * r) / 4;
-    const y = (1 - vOf(s)) * h;
+    const st = sA + 0.25 + ((sB - 0.35 - (sA + 0.25)) * r) / 4;
+    const y = (1 - vOf(st)) * h;
     if (r === 0 || OVHD_ROWS[r - 1]![0] !== title) {
-      ctx.strokeRect(40, y - 120, w - 80, 2);
-      txt(ctx, title, w / 2, y - 100, '#e6e9ec', 22, 'center', 600);
+      ctx.fillStyle = night > 0.5 ? 'rgba(255,211,138,0.3)' : 'rgba(20,22,25,0.5)';
+      ctx.fillRect(X(-0.24), y - 0.115 * kx * 0.55 - 14, X(0.24) - X(-0.24), 2);
+      txt(ctx, title, w / 2, y - 0.1 * kx * 0.55 - 6, legend, 13, 'center', 700);
     }
     labels.forEach((l, c) => {
       const x = (0.5 + ((c - 1) * 0.16) / 0.96) * w;
-      txt(ctx, l, x, y - 52, '#e6e9ec', 17, 'center', 600);
+      txt(ctx, l, x, y - 26, legend, 10, 'center', 700);
     });
   });
+  // engine fire handles across the forward edge, and the APU fire button
+  for (let k = 0; k < 4; k++) {
+    const x = X(-0.21 + k * 0.14);
+    ctx.fillStyle = '#7a1414';
+    ctx.fillRect(x - 18, 10, 36, 20);
+    txt(ctx, `ENG ${k + 1}`, x, 21, '#ffdede', 9, 'center', 800);
+  }
+  ctx.shadowBlur = 0;
 }
 
 // ----------------------------------------------------------------------- suite
@@ -687,6 +789,9 @@ export class DisplaySuite {
   readonly canvases = new Map<ScreenName, HTMLCanvasElement>();
   readonly textures = new Map<ScreenName, CanvasTexture>();
   private last = 0;
+  /** power-up time of each screen (ms), for the self-test sequence */
+  private bootAt = new Map<ScreenName, number>();
+  private wasOn = new Map<ScreenName, boolean>();
 
   constructor() {
     for (const name of Object.keys(SIZE) as ScreenName[]) {
@@ -714,6 +819,20 @@ export class DisplaySuite {
       ctx.fillRect(0, 0, c.width, c.height);
       // Only essential displays run on battery power (educational simplification)
       const on = name === 'OVHD' || s.elec.ac || (s.elec.dc && (name === 'PFD_C' || name === 'EWD'));
+      // Power-up: dark backlight, then the self test, staggered from screen to screen
+      if (on && !this.wasOn.get(name) && name !== 'OVHD') this.bootAt.set(name, now + Math.random() * 1200);
+      this.wasOn.set(name, on);
+      const boot = on && name !== 'OVHD' ? now - (this.bootAt.get(name) ?? -1e9) : 1e9;
+      if (boot < 7000) {
+        ctx.fillStyle = boot < 700 ? '#000' : '#05070a';
+        ctx.fillRect(0, 0, c.width, c.height);
+        if (boot > 900 && name !== 'FCU') {
+          txt(ctx, 'SELF TEST IN PROGRESS', c.width / 2, c.height / 2 - 14, '#f2f4f6', Math.max(14, c.width / 26), 'center', 600);
+          txt(ctx, '(MAX 40 SECONDS)', c.width / 2, c.height / 2 + 18, '#f2f4f6', Math.max(12, c.width / 32), 'center', 500);
+        }
+        this.textures.get(name)!.needsUpdate = true;
+        continue;
+      }
       if (on) {
         ctx.save();
         switch (name) {
@@ -745,7 +864,7 @@ export class DisplaySuite {
             drawFCU(ctx, c.width, c.height, s);
             break;
           case 'OVHD':
-            drawOverhead(ctx, c.width, c.height);
+            drawOverhead(ctx, c.width, c.height, s);
             break;
         }
         ctx.restore();

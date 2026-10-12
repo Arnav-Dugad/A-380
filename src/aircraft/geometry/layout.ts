@@ -87,7 +87,7 @@ export const VTP = {
   rootY: 9.6,
   tipY: HEIGHT - 0.01,
   leRoot: 54.0,
-  leTip: 66.4,
+  leTip: 67.6, // [A] swept further aft after a side-photograph overlay; the tip trailing edge stays inside the published 72.72 m length
   chordRoot: 15.4,
   chordTip: 5.0,
   tc: 0.11,

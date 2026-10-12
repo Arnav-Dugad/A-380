@@ -8,6 +8,12 @@ src/aircraft/geometry/      pure TypeScript generators (no DOM), shared by the b
   layout.ts                 every dimension, with [V]erified / [A]pproximation tags
   fuselage.ts, wing.ts, tail.ts, engine.ts, gear.ts, airframe.ts, lifting.ts, surface.ts
   structure.ts, cabin.ts, cockpit.ts
+src/aircraft/textures/      procedural skin atlases (fuselage, wing, tail, nacelle, tyre) painted with
+                            OffscreenCanvas in atlas.worker.ts; height → normal maps; roughness/metal packing
+src/render/                 viewport shading modes, the path tracer (lazy chunk) and render settings
+src/tools/                  outliner visibility, measure/annotate picking, ortho view, turntable, share
+                            links, video capture, WebXR sessions, guided story
+src/effects/                wing-bending and tyre-squash shader patch, heat haze, slides, flight effects
 src/aircraft/               runtime model: GLB loading with progressive LOD, PBR material library,
                             rig (articulated-node index), selection, material director (x-ray / isolate /
                             highlight), exploder, section planes, lazily streamed layers
@@ -73,6 +79,24 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
 - **One input path.** Keyboard, gamepad and on-screen touch controls all write to the same
   flight inputs and system commands.
 
+- **Rendered shading is a snapshot.** The path tracer (three-gpu-pathtracer, lazily loaded)
+  gathers the visible scene into one BVH, built in a worker. Custom shaders (sky, rain) are
+  hidden and instanced seats are expanded for the snapshot. Camera moves restart accumulation
+  with a low-resolution preview; scene changes rebuild the snapshot after a short debounce.
+  Comparisons of the camera use a tolerance, and the eased view offset settles exactly, so
+  damping noise never restarts a converging image.
+- **Atlases are painted, not downloaded.** Skin textures are generated from the same
+  geometry functions that build the aircraft (station, angle, chord fraction), so stencils
+  and seams land in the right place on every LOD. Small atlases are painted synchronously
+  for the first frame; the preset's full resolution follows from a worker and is swapped in
+  without recompiling shaders.
+- **Deformation in the vertex shader.** Wing bending and tyre squash are applied after
+  projection in view space from a shared uniform block (aircraft inverse matrix, up vector,
+  bend amount, ground height). The path tracer ignores them; its snapshot is the rest shape.
+- **Tools never touch the model files.** Measurements, pins and saved views are stored in the
+  aircraft frame in local storage; share links serialise view and configuration into the URL
+  fragment.
+
 ## Quality presets
 
 | Preset | DPR | Shadows | AO | Post | Geometry |
@@ -83,3 +107,6 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
 | Performance | 0.6–1 | Contact shadows only | — | None (renderer tone mapping) | Lo LOD, light cabin |
 
 The drei `PerformanceMonitor` steps Ultra down to High when the frame rate drops.
+
+Skin atlas sizes: Ultra/High 8192 × 2048 (fuselage, wing), 4096 × 2048 (tail); Balanced
+4096 × 1024; Performance 2048 × 512, painted on the main thread at start.

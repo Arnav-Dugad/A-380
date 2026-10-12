@@ -102,18 +102,20 @@ export function buildVtp(quality: number): Group {
   }
   g.add(mesh('vtp_te_root', panel(vtpSurface, base, VTP.rootY + 0.5, RUDDER_FRAC, 1, { nChord: 8, uvMap: vtpUV }), 'tailSkin', 'vtp'));
   g.add(mesh('vtp_te_tip', panel(vtpSurface, VTP.tipY - 0.35, VTP.tipY, RUDDER_FRAC, 1, { nChord: 8, uvMap: vtpUV }), 'tailSkin', 'vtp'));
-  // Dorsal fillet blending the fin leading edge into the crown
+  // Dorsal fillet blending the fin leading edge into the crown. Its base stays above the
+  // upper-deck ceiling (10.17 m) so it never shows inside the cabin.
+  const FB = 10.2;
   const fillet: LiftingSurface = {
     cambered: false,
     chord: () => 1,
     tc: () => 0.5,
     map(h, xc, yn) {
-      const t = (h - (VTP.rootY - 0.6)) / 1.6;
+      const t = (h - FB) / (VTP.rootY + 1.0 - FB);
       const le = lerp(VTP.leRoot - 6.5, VTP.leRoot + 1.0, t);
       const te = VTP.leRoot + 3.0;
       return [sx(le + xc * (te - le)), h, yn * lerp(1.6, 0.6, t) * (1 - xc * 0.3)];
     },
   };
-  g.add(mesh('vtp_fillet', panel(fillet, VTP.rootY - 0.6, VTP.rootY + 1.0, 0, 1, { nChord: 14, nSpan: 6 }), 'paintTail', 'vtp'));
+  g.add(mesh('vtp_fillet', panel(fillet, FB, VTP.rootY + 1.0, 0, 1, { nChord: 14, nSpan: 6 }), 'paintTail', 'vtp'));
   return g;
 }

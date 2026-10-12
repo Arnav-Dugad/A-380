@@ -9,6 +9,7 @@ import { useUI } from './state/ui';
 import { useTools } from './tools/toolsState';
 import { ReferenceOverlay, StoryOverlay } from './ui/ToolPanels';
 import { useLayout } from './ui/useMedia';
+import { RainOnGlass } from './ui/RainOnGlass';
 
 export default function App() {
   const photo = useUI((s) => s.photoMode);
@@ -19,6 +20,7 @@ export default function App() {
   return (
     <div className="fixed inset-0 overflow-hidden bg-graphite-950 text-paper">
       <Viewport />
+      <RainOnGlass />
       <ReferenceOverlay />
       {!photo && !cinematic && <Interface />}
       {photo && <PhotoModeBar />}

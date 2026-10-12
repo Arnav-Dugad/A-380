@@ -9,6 +9,7 @@ import { BoxGeometry, CanvasTexture, Color, InstancedMesh, LinearSRGBColorSpace,
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildGse } from './gse';
 import { BeltBags, JetBridges, useFleetVisible } from './GroundOps';
+import { ApronSurface, GroundCrew, OtherAircraft, TerminalFacade } from './Environment';
 import { APRON, RWY, STAND, TERMINAL, TOWER, TWY_CONNECTORS, TWY_Z } from './layout';
 
 function noiseTex(base: [number, number, number], amp: number, size = 512, streaks = false): Texture {
@@ -178,7 +179,7 @@ function lightInstances(): { pos: Vector3; color: Color }[] {
   return out;
 }
 
-export function Airport({ night }: { night: boolean }) {
+export function Airport({ night, wet = 0, flight = false }: { night: boolean; wet?: number; flight?: boolean }) {
   const data = useMemo(() => {
     const asphalt = noiseTex([58, 60, 64], 20, 512, true);
     asphalt.repeat.set(40, 1);
@@ -231,10 +232,7 @@ export function Airport({ night }: { night: boolean }) {
       <mesh geometry={data.tw.lines}>
         <meshStandardMaterial color="#f2c230" roughness={0.7} emissive="#f2c230" emissiveIntensity={night ? 0.25 : 0} />
       </mesh>
-      <mesh position={[(APRON.x0 + APRON.x1) / 2, 0.02, (APRON.z0 + APRON.z1) / 2]} rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[APRON.x1 - APRON.x0, Math.abs(APRON.z1 - APRON.z0)]} />
-        <meshStandardMaterial map={data.concrete} roughness={0.85} color="#c9cbc9" polygonOffset polygonOffsetFactor={2} polygonOffsetUnits={2} />
-      </mesh>
+      <ApronSurface wet={wet} />
       <mesh geometry={data.stand}>
         <meshStandardMaterial color="#f2c230" roughness={0.7} />
       </mesh>
@@ -245,6 +243,9 @@ export function Airport({ night }: { night: boolean }) {
       <mesh geometry={data.term.roof} castShadow receiveShadow>
         <meshStandardMaterial color="#9aa1a8" roughness={0.4} metalness={0.6} />
       </mesh>
+      <TerminalFacade night={night} />
+      <OtherAircraft />
+      {!flight && fleetVisible && <GroundCrew />}
       <mesh geometry={data.term.glass}>
         <meshPhysicalMaterial color="#20313f" roughness={0.08} metalness={0.4} emissive="#ffd9a0" emissiveIntensity={night ? 0.55 : 0} />
       </mesh>

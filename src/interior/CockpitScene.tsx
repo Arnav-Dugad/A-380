@@ -9,7 +9,7 @@ import { Color, Euler, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion
 import { getRig } from '../aircraft/rig';
 import { LazyLayer } from '../aircraft/Layers';
 import { EYE_CAPTAIN, EYE_FO } from '../aircraft/geometry/cockpit';
-import { getDisplays, autopilot, type ScreenName } from '../cockpit/displays';
+import { getDisplays, autopilot, displayState, type ScreenName } from '../cockpit/displays';
 import { firstPerson, type FpPose } from '../camera/FirstPerson';
 import { systems, type Autobrake, type SystemsState } from '../sim/systems';
 import { useUI } from '../state/ui';
@@ -207,6 +207,10 @@ function CockpitBinder({ root }: { root: Group }) {
 
   useFrame(() => {
     const s = systems.state;
+    // panel integral lighting comes on in dark conditions (and with the dome light off)
+    const ui = useUI.getState();
+    const dark = ui.env === 'night' || ui.env === 'hangar' || (ui.section === 'flight' && (ui.timeOfDay < 6.5 || ui.timeOfDay > 18.5));
+    displayState.integral = dark && (s.elec.ac || s.elec.dc) ? 1 : 0;
     getDisplays().update(performance.now());
     for (const c of caps.current) c.mat.emissive.copy(COLORS[lit(c.id, s)]);
     const rig = getRig();

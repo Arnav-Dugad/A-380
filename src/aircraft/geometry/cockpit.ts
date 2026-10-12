@@ -358,9 +358,33 @@ export function buildCockpit(): Group {
   }
   // Crew seats
   const seats = [seat([sx(5.35), F, -0.56]), seat([sx(5.35), F, 0.56]), seat([sx(6.6), F, -0.75])];
-  g.add(mesh('crew_seats', merge(seats.map((x) => x.fabric)), 'seatFabricBiz', 'cockpitPanel'));
+  g.add(mesh('crew_seats', merge(seats.map((x) => x.fabric)), 'sheepskin', 'cockpitPanel'));
   g.add(mesh('crew_seat_frames', merge(seats.map((x) => x.frame)), 'cockpitTrim', 'cockpitPanel'));
   // Rudder pedals
+  // sun visors parked at the top of the side windows, tinted and translucent
+  const visors = [-1, 1].map((side) => rbox([sx(4.95), F + 1.42, side * 1.02], [0.42, 0.26, 0.012], 0.01, 0, side * 0.42, side * 0.35));
+  g.add(mesh('sun_visors', merge(visors), 'visor', 'cockpitPanel'));
+  // reinforced flight-deck door in the rear wall: frame, panel, handle, viewer and keypad
+  const door = merge([
+    box([sx(7.41), F + 1.0, 0.55], [0.03, 2.0, 0.08]),
+    box([sx(7.41), F + 1.0, -0.4], [0.03, 2.0, 0.08]),
+    box([sx(7.41), F + 2.02, 0.075], [0.03, 0.08, 1.03]),
+    rbox([sx(7.4), F + 0.99, 0.075], [0.05, 1.96, 0.9], 0.01),
+  ]);
+  g.add(mesh('cockpit_door', door, 'cockpitPanel', 'cockpitPanel'));
+  g.add(
+    mesh(
+      'cockpit_door_hardware',
+      merge([
+        cylinder([sx(7.37), F + 1.02, -0.27], [sx(7.33), F + 1.02, -0.27], 0.012, 10),
+        box([sx(7.33), F + 1.02, -0.2], [0.02, 0.025, 0.16]),
+        cylinder([sx(7.38), F + 1.55, 0.075], [sx(7.36), F + 1.55, 0.075], 0.018, 12),
+        rbox([sx(7.37), F + 1.25, -0.3], [0.02, 0.12, 0.08], 0.006),
+      ]),
+      'chrome',
+      'cockpitPanel',
+    ),
+  );
   g.add(mesh('pedals', merge([-0.66, -0.46, 0.46, 0.66].map((z) => box([sx(4.25), F + 0.12, z], [0.04, 0.24, 0.1], 0, deg(-25)))), 'darkMetal', 'cockpitPanel'));
 
   g.add(overhead());

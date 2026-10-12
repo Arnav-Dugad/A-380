@@ -225,32 +225,48 @@ function Rain({ amount, wind }: { amount: number; wind: number }) {
 }
 
 // ------------------------------------------------------------------ clouds
+/** Tileable fractal (value-noise) cumulus field: soft billows with darker undersides. */
 function cloudTexture(): CanvasTexture {
-  const s = 512;
+  const S = 512;
   const c = document.createElement('canvas');
-  c.width = c.height = s;
+  c.width = c.height = S;
   const ctx = c.getContext('2d')!;
   let seed = 5;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 260; i++) {
-    const x = rnd() * s;
-    const y = rnd() * s;
-    const r = 20 + rnd() * 60;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, 'rgba(255,255,255,0.35)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    for (const dx of [-s, 0, s]) for (const dy of [-s, 0, s]) {
-      ctx.save();
-      ctx.translate(dx, dy);
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+  const octaves = [8, 16, 32, 64, 128].map((n) => ({ n, v: Array.from({ length: n * n }, rnd) }));
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+  const noise = (o: { n: number; v: number[] }, x: number, y: number) => {
+    const fx = x * o.n;
+    const fy = y * o.n;
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const tx = smooth(fx - x0);
+    const ty = smooth(fy - y0);
+    const g = (i: number, j: number) => o.v[((j + o.n) % o.n) * o.n + ((i + o.n) % o.n)]!;
+    const a = g(x0, y0) + (g(x0 + 1, y0) - g(x0, y0)) * tx;
+    const b = g(x0, y0 + 1) + (g(x0 + 1, y0 + 1) - g(x0, y0 + 1)) * tx;
+    return a + (b - a) * ty;
+  };
+  const img = ctx.createImageData(S, S);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      let f = 0;
+      let amp = 0.5;
+      for (const o of octaves) {
+        f += noise(o, x / S, y / S) * amp;
+        amp *= 0.5;
+      }
+      const a = Math.max(0, Math.min(1, (f - 0.42) / 0.3));
+      const shade = 200 + 55 * Math.min(1, (f - 0.4) * 2.2);
+      const i = (y * S + x) * 4;
+      img.data[i] = img.data[i + 1] = shade;
+      img.data[i + 2] = Math.min(255, shade + 6);
+      img.data[i + 3] = a * a * (3 - 2 * a) * 255;
     }
-  }
+  ctx.putImageData(img, 0, 0);
   const t = new CanvasTexture(c);
   t.wrapS = t.wrapT = RepeatWrapping;
+  t.colorSpace = SRGBColorSpace;
   return t;
 }
 
@@ -271,7 +287,7 @@ function Clouds({ cover, night }: { cover: number; night: boolean }) {
   return (
     <mesh ref={ref} position={[0, 2100, 0]} rotation-x={Math.PI / 2}>
       <planeGeometry args={[30000, 30000]} />
-      <meshBasicMaterial map={tex} alphaMap={tex} transparent depthWrite={false} color={night ? '#2a3140' : cover > 0.8 ? '#b8bec6' : '#ffffff'} side={2} fog />
+      <meshBasicMaterial map={tex} transparent depthWrite={false} color={night ? '#2a3140' : cover > 0.8 ? '#b8bec6' : '#ffffff'} side={2} fog />
     </mesh>
   );
 }
@@ -530,9 +546,9 @@ export function World() {
         {outdoor && (
           <>
             <Ground wet={w.rain} />
-            <Airport night={look.night} />
+            <Airport night={look.night} wet={w.rain} flight={flight} />
             <Windsock windKt={w.wind} />
-            {look.night && !flight && <ApronFloodlights />}
+            {look.night && !flight && <ApronFloodlights shadows={quality === 'ultra'} />}
           </>
         )}
       </group>
@@ -571,7 +587,7 @@ function Windsock({ windKt }: { windKt: number }) {
 }
 
 /** High-mast apron floodlights for the night inspection scene. */
-function ApronFloodlights() {
+function ApronFloodlights({ shadows = false }: { shadows?: boolean }) {
   const masts = [
     [STAND.x - 45, STAND.z + 30],
     [STAND.x + 45, STAND.z + 30],
@@ -589,7 +605,7 @@ function ApronFloodlights() {
             <boxGeometry args={[3, 0.6, 1.2]} />
             <meshStandardMaterial color="#111" emissive="#fff1cf" emissiveIntensity={6} toneMapped={false} />
           </mesh>
-          <spotLight position={[0, 30, 0]} angle={0.75} penumbra={0.6} intensity={7000} distance={160} decay={2} color="#ffe9c7" />
+          <spotLight position={[0, 30, 0]} angle={0.75} penumbra={0.6} intensity={7000} distance={160} decay={2} color="#ffe9c7" castShadow={shadows} shadow-mapSize={[1024, 1024]} shadow-bias={-0.0006} />
         </group>
       ))}
     </>

@@ -201,6 +201,48 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   on canvas rather than scanned or photographed. There are no ray-traced reflections, and
   global illumination is approximated by HDR lighting, baked AO and N8AO.
 
+## Rendering, tools and realism upgrade
+
+- ✅ Viewport shading switch (Wireframe, Solid, Material, Rendered) plus baked-AO and normals
+  passes, with `Z` / `Shift+Z` shortcuts.
+- 🟡 Rendered mode: GPU path tracing (three-gpu-pathtracer 0.0.24) with denoising, thin-lens
+  depth of field and click-to-focus, bounces, tone mapping (Neutral, AgX, ACES), transparent
+  background and 2× / 4K output. The image is a snapshot: animations hold still until
+  re-synced. Shader-only effects (wing bending, heat haze, sky dome, rain) are not path traced.
+  Convergence speed on real GPUs has not been measured; under software rendering it is far
+  too slow to judge.
+- ✅ Tools: outliner with per-node visibility, measuring tape (metres and feet), annotation
+  pins, saved views with thumbnails, share links in the URL fragment, reference-image overlay
+  with opacity, scale, offset, rotation, mirror and difference blend, Blender numpad views and
+  an orthographic-style view, turntable and free video capture (WebM or MP4), guided story.
+- 🟡 WebXR VR (true scale, teleport and snap turn) and AR (1:40 model on the floor). Written to
+  the WebXR specification but **untested on a headset or AR phone**.
+- ✅ Procedural skin atlases painted in a worker, up to 8192 × 2048: panel joints, rivet rows
+  and oil-canning (normal maps), door and service stencils, static-port and probe keep-clear
+  markings, cockpit-pane gaskets, walkway and NO STEP stencils, fuel-tank access panels, LE
+  erosion, exhaust soot and grime, tail emblem, nacelle latches and access doors, tyre
+  sidewall lettering. Branding and registrations are fictional.
+- ✅ Exterior micro-detail: static dischargers, slat tracks, nav/landing/beacon/logo/scan
+  light lenses, articulated windshield wipers, APU intake door, outflow valves, drain masts,
+  NACA fuel vents, nacelle strakes, acoustic liners, reverser cascade vanes, spinner spiral,
+  aft pylon heat shields, brake piston housings and rods, gear-door actuators, nose-gear lamps.
+- ✅ Effects: wing bending (load- and turbulence-driven), tyre contact-patch squash, engine
+  heat haze, landing/taxi light beams, evacuation slide inflation, touchdown smoke and rubber
+  marks, contrails above about 8 km, camera shake, wipers and rain on the windshield.
+- ✅ Apron operations: docking boarding bridges, bags on the belt loaders, fuel hose, ground
+  crew, a pushback onto the taxilane with a towbarless tug.
+- ✅ Environment: jointed concrete slabs with tyre tracks and stains, rain puddles, terminal
+  curtain wall, other airliners at neighbouring stands, fractal cloud layer, shadow-casting
+  floodlights at night (Ultra).
+- ✅ Cabin after photographs of a contemporary A380 cabin: cream diamond-quilted leather,
+  patterned economy fabric, printed headrest covers and pillows, walnut window surrounds,
+  welcome screens, an upper-deck bar lounge, galley carts, EXIT signs, floor-path lighting,
+  class curtains.
+- ✅ Flight deck: overhead face with sub-panels, annunciators and synoptic lines aligned to the
+  physical switches and lit by integral lighting at night; display self-test on power-up;
+  sheepskin seat covers; sun visors; flight-deck door.
+- ⏳ Interactive overhead bins and window shades in the cabin (bins are merged geometry).
+
 ## Known limitations
 
 - Several geometric details are approximations because Airbus drawings are proprietary or

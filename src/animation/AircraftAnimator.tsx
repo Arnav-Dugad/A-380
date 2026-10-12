@@ -49,6 +49,9 @@ const FAN_VISUAL_SCALE = 0.12;
 const FAN_RPM_100 = 2900; // approximate Trent 900 N1 at 100 %
 
 let wheelAngle = 0;
+let wiperPhase = 0;
+/** current wiper sweep 0…1, read by the rain-on-glass overlay */
+export const wiperState = { angle: 0 };
 const fanAngle = [0, 0, 0, 0];
 
 export function applyState(rig: AircraftRig, dt: number): void {
@@ -108,6 +111,15 @@ export function applyState(rig: AircraftRig, dt: number): void {
     rig.spin(`eng${i + 1}_fan`, fanAngle[i]!);
     rig.slide(`eng${i + 1}_reverser`, ease(e.reverser));
   });
+
+  // ---- windshield wipers: run in rain (fast in heavy rain), park otherwise
+  const weather = useUI.getState().weather;
+  const wipe = weather === 'heavyRain' ? 1.6 : weather === 'lightRain' ? 0.75 : 0;
+  wiperPhase = wipe ? wiperPhase + dt * wipe * Math.PI : 0;
+  const sweep = wipe ? (1 - Math.cos(wiperPhase)) / 2 : 0;
+  rig.hinge('wiper_R', sweep * 62);
+  rig.hinge('wiper_L', sweep * 62);
+  wiperState.angle = sweep;
 
   // ---- doors
   for (const d of Object.values(s.doors)) {
