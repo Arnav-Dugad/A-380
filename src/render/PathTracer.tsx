@@ -165,6 +165,8 @@ function autoFocus(cam: PerspectiveCamera): number {
   return Math.max(0.5, t.sub(cam.position).dot(fwd));
 }
 
+/** Scene builds, serialised (see the build effect). */
+let buildChain: Promise<void> = Promise.resolve();
 /** Cleared after the first failure so later builds go straight to the main thread. */
 let workerOk = true;
 
@@ -268,7 +270,10 @@ export default function PathTracerImpl() {
     const outdoor = ui.section === 'flight' || ((ui.env === 'apron' || ui.env === 'golden' || ui.env === 'night') && ui.section !== 'cabin' && ui.section !== 'cockpit');
     const t0 = performance.now();
     // let the "building" state paint before the synchronous part of the build
-    const timer = window.setTimeout(async () => {
+    // Builds run strictly one after another: starting a scene build while a BVH is still being
+    // generated makes the library return a promise that never settles. A request that has
+    // been superseded by the time its turn comes is skipped.
+    const run = async () => {
       if (cancelled) return;
       syncCamera(camera, pcam);
       let pt = tracer.current?.pt ?? create(workerOk);
@@ -316,6 +321,9 @@ export default function PathTracerImpl() {
       elapsed.current = 0;
       ready.current = true;
       useRender.getState().set({ status: 'compiling', progress: 1, triangles: Math.round(tris), elapsed: (performance.now() - t0) / 1000 });
+    };
+    const timer = window.setTimeout(() => {
+      buildChain = buildChain.then(run).catch((e) => useRender.getState().set({ status: 'error', error: String(e) }));
     }, 60);
     return () => {
       cancelled = true;

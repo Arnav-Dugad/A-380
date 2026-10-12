@@ -43,13 +43,21 @@ export function Viewport() {
   useEffect(() => resetPushback(), [env, section]);
   // full-resolution skin atlases are painted in a worker once the first frames are up
   useEffect(() => {
+    let resync = 0;
     const t = window.setTimeout(() => {
       void setAtlasQuality(quality, () => {
-        const r = useRender.getState();
-        if (r.shading === 'rendered') r.resync();
+        // several atlases arrive in quick succession: rebuild a path-traced snapshot once
+        window.clearTimeout(resync);
+        resync = window.setTimeout(() => {
+          const r = useRender.getState();
+          if (r.shading === 'rendered') r.resync();
+        }, 1500);
       });
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(resync);
+    };
   }, [quality]);
   return (
     <Canvas
