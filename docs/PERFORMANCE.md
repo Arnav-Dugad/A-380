@@ -129,7 +129,7 @@ following safeguards are in place:
 | `npm run lint` (ESLint) | clean |
 | `npm run typecheck` (`tsc -b`, strict) | clean |
 | `npm test` (Vitest): systems state machine, flight model, ten scenarios, geometry dimensions | **26 / 26 passed** |
-| `npx playwright test`: 14 desktop tests and 3 mobile (Pixel 7, touch) tests against the production build | **All 17 pass.** In the last full run (about 16 minutes under SwiftShader), 15 passed. The engine-start and cabin-walk tests timed out; their waits were made independent of frame rate, and both pass when re-run on their own. The cabin test needs about 3 minutes because the 1.4M-triangle cabin renders at about 0.2 fps there. |
+| `npx playwright test`: 14 desktop tests and 3 mobile (Pixel 7, touch) tests against the production build | **17 / 17 passed** in one full run after the rendering, tools and realism upgrade (21 minutes under SwiftShader, one worker). The cabin test is the slowest, because the 1.4M-triangle cabin renders at about 0.2 fps there. |
 
 The browser tests cover the following:
 
