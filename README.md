@@ -59,7 +59,7 @@ Every moving part is a separate node carrying its hinge axis and limits. See
 - [docs/ASSETS.md](docs/ASSETS.md): asset evaluation, licensing and credits
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): code structure and design decisions
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md): measured sizes, draw calls and test results
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Cloudflare Pages (free tier)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Cloudflare Workers static assets (free tier)
 - [PROJECT_STATUS.md](PROJECT_STATUS.md): implementation checklist and known limitations
 
 ## Keyboard

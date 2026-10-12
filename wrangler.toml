@@ -1,4 +1,9 @@
-# Cloudflare Pages project (free tier). Deploy with:  npm run build && npx wrangler pages deploy
+# Cloudflare Workers static-assets site (free tier: static asset requests are free and unlimited).
+# Deploy with:  npm run build && npx wrangler deploy
+# In Workers Builds (dashboard → Workers & Pages → Import a repository) the Worker's name must
+# match `name` below; use build command `npm run build` and deploy command `npx wrangler deploy`.
 name = "a380-digital-twin"
-pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./dist"

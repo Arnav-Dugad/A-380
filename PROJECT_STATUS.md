@@ -122,12 +122,13 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
 - ✅ Unit tests (Vitest): systems, flight model, scenarios, geometry.
 - ✅ Browser tests (Playwright) of the real rendered app: 15 of 15 pass, 14 desktop and 1
   mobile. Details are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
-- ✅ Cloudflare Pages configuration (`wrangler.toml`, `_headers`) and a GitHub Actions
-  CI/deploy workflow.
-- ⏳ **Live Cloudflare deployment is blocked.** The build environment's network policy
-  denies `api.cloudflare.com` and the `wrangler login` OAuth flow. See
-  [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the commands that deploy it from your
-  machine or from CI.
+- ✅ Cloudflare configuration for Workers static assets (`wrangler.toml`, `_headers`), on the
+  free tier. It works with Workers Builds (the dashboard's Git integration), with Wrangler and
+  with the GitHub Actions workflow.
+- ⏳ **Live deployment is pending.** The first dashboard build succeeded, but the upload step
+  failed because the configuration targeted Pages. The configuration now targets Workers
+  static assets. This build environment cannot reach `api.cloudflare.com`, so it cannot
+  deploy directly. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Known limitations
 
