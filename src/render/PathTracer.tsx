@@ -8,6 +8,8 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import {
+  BufferAttribute,
+  BufferGeometry,
   Group,
   Matrix4,
   Mesh,
@@ -40,16 +42,55 @@ function materialsOf(m: Mesh): Material[] {
 
 /** Objects the path tracer cannot represent: custom shaders (sky, stars, rain), invisible helpers. */
 function unsupported(m: Mesh): boolean {
-  if (m.userData.noPathTrace) return true;
+  if (m.userData.noPathTrace || !m.geometry?.getAttribute('position')) return true;
   return materialsOf(m).some((x) => (x as { isShaderMaterial?: boolean }).isShaderMaterial || !x.visible || !x.colorWrite || (x.transparent && x.opacity < 0.02));
 }
 
 const _inst = new Matrix4();
 
+const TRACED_ATTRIBUTES = ['position', 'normal', 'uv', 'color', 'tangent'] as const;
+const plainCache = new WeakMap<BufferGeometry, BufferGeometry>();
+
+/** True when a geometry carries quantized (normalised integer) or interleaved attributes. */
+function quantized(g: BufferGeometry): boolean {
+  return TRACED_ATTRIBUTES.some((k) => {
+    const a = g.getAttribute(k);
+    return !!a && ((a as { isInterleavedBufferAttribute?: boolean }).isInterleavedBufferAttribute || !(a.array instanceof Float32Array));
+  });
+}
+
 /**
- * Prepare the live scene for a snapshot: hide what cannot be traced and stand in plain meshes
- * for every instance of an InstancedMesh (cabin seats, apron lights). Returns an undo function
- * and the number of distinct textures the snapshot will upload.
+ * The tracer merges every mesh into one buffer, and that merge silently corrupts the whole
+ * scene (a black frame) when the compressed aircraft's quantized, interleaved attributes meet
+ * plain float ones. Trace a dequantized float copy instead; it is built once per geometry.
+ */
+function plainGeometry(g: BufferGeometry): BufferGeometry {
+  let out = plainCache.get(g);
+  if (out) return out;
+  out = new BufferGeometry();
+  for (const k of TRACED_ATTRIBUTES) {
+    const a = g.getAttribute(k);
+    if (!a) continue;
+    const n = a.itemSize;
+    const arr = new Float32Array(a.count * n);
+    for (let i = 0; i < a.count; i++) for (let c = 0; c < n; c++) arr[i * n + c] = a.getComponent(i, c);
+    out.setAttribute(k, new BufferAttribute(arr, n));
+  }
+  if (g.index) out.setIndex(g.index);
+  for (const grp of g.groups) out.addGroup(grp.start, grp.count, grp.materialIndex);
+  plainCache.set(g, out);
+  return out;
+}
+
+function traceable(g: BufferGeometry): BufferGeometry {
+  return quantized(g) ? plainGeometry(g) : g;
+}
+
+/**
+ * Prepare the live scene for a snapshot: hide what cannot be traced, and stand in plain meshes
+ * for every instance of an InstancedMesh (cabin seats, apron lights) and for every mesh with
+ * quantized vertex data. Returns an undo function and the number of distinct textures the
+ * snapshot will upload.
  */
 function stage(scene: Scene): { undo: () => void; textures: number } {
   scene.updateMatrixWorld(true);
@@ -73,7 +114,7 @@ function stage(scene: Scene): { undo: () => void; textures: number } {
       for (let i = 0; i < im.count; i++) {
         im.getMatrixAt(i, _inst);
         if (Math.abs(_inst.determinant()) < 1e-9) continue; // hidden instance
-        const p = new Mesh(im.geometry, im.material);
+        const p = new Mesh(traceable(im.geometry), im.material);
         p.matrixAutoUpdate = false;
         p.matrix.multiplyMatrices(im.matrixWorld, _inst);
         p.castShadow = im.castShadow;
@@ -82,6 +123,13 @@ function stage(scene: Scene): { undo: () => void; textures: number } {
     } else if (bad) {
       hide.push(m);
       return;
+    } else if (quantized(m.geometry)) {
+      hide.push(m);
+      const p = new Mesh(plainGeometry(m.geometry), m.material);
+      p.matrixAutoUpdate = false;
+      p.matrix.copy(m.matrixWorld);
+      p.castShadow = m.castShadow;
+      proxies.add(p);
     }
     for (const mat of materialsOf(m)) {
       const rec = mat as unknown as Record<string, Texture | null | undefined>;
