@@ -78,9 +78,8 @@ test.describe('A380 digital twin', () => {
     await openApp(page);
     await page.evaluate(() => window.__a380!.systems.applyScenario('taxi'));
     const q0 = await page.evaluate(() => window.__a380!.node('eng1_fan')!.quat);
-    await page.waitForTimeout(1500);
-    const q1 = await page.evaluate(() => window.__a380!.node('eng1_fan')!.quat);
-    expect(q0).not.toEqual(q1);
+    // poll rather than wait a fixed time: under software rendering a frame can take seconds
+    await page.waitForFunction((q) => window.__a380!.node('eng1_fan')!.quat.some((v, i) => Math.abs(v - q[i]!) > 1e-4), q0, { timeout: 60_000 });
     const n1 = await page.evaluate(() => window.__a380!.systems.state.engines.map((e) => e.n1));
     for (const v of n1) expect(v).toBeGreaterThan(15);
   });
