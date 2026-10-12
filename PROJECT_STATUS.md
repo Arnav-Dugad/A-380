@@ -198,8 +198,9 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   - a fuel tanker, pushback tug and ground power unit with its cable.
 - ✅ A seamless polished-epoxy studio floor.
 - 🟡 Photorealism has limits. Geometry is procedural, and the livery and textures are drawn
-  on canvas rather than scanned or photographed. There are no ray-traced reflections, and
-  global illumination is approximated by HDR lighting, baked AO and N8AO.
+  on canvas rather than scanned or photographed. In the real-time Material mode there are no
+  ray-traced reflections, and global illumination is approximated by HDR lighting, baked AO
+  and N8AO; only Rendered mode traces them.
 
 ## Rendering, tools and realism upgrade
 
@@ -209,8 +210,9 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   depth of field and click-to-focus, bounces, tone mapping (Neutral, AgX, ACES), transparent
   background and 2× / 4K output. The image is a snapshot: animations hold still until
   re-synced. Shader-only effects (wing bending, heat haze, sky dome, rain) are not path traced.
-  Convergence speed on real GPUs has not been measured; under software rendering it is far
-  too slow to judge.
+  Verified under software rendering (SwiftShader): the snapshot builds and a correct, lit
+  2-sample image comes out, with and without the denoiser. Convergence speed and final image
+  quality on real GPUs have not been measured.
 - ✅ Tools: outliner with per-node visibility, measuring tape (metres and feet), annotation
   pins, saved views with thumbnails, share links in the URL fragment, reference-image overlay
   with opacity, scale, offset, rotation, mirror and difference blend, Blender numpad views and

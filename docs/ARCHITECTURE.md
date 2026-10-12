@@ -81,7 +81,11 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
 
 - **Rendered shading is a snapshot.** The path tracer (three-gpu-pathtracer, lazily loaded)
   gathers the visible scene into one BVH, built in a worker. Custom shaders (sky, rain) are
-  hidden and instanced seats are expanded for the snapshot. Camera moves restart accumulation
+  hidden and instanced seats are expanded for the snapshot. The compressed aircraft's
+  quantized, interleaved vertex data is traced through dequantized float copies (built once
+  per geometry): mixed with plain float meshes in the tracer's single merged buffer, it
+  corrupted the whole snapshot. Builds run one at a time, because starting one while a BVH is
+  still building makes the library return a promise that never settles. Camera moves restart accumulation
   with a low-resolution preview; scene changes rebuild the snapshot after a short debounce.
   Comparisons of the camera use a tolerance, and the eased view offset settles exactly, so
   damping noise never restarts a converging image.
