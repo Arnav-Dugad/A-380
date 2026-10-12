@@ -112,7 +112,7 @@ following safeguards are in place:
 | `npm run lint` (ESLint) | clean |
 | `npm run typecheck` (`tsc -b`, strict) | clean |
 | `npm test` (Vitest): systems state machine, flight model, ten scenarios, geometry dimensions | **26 / 26 passed** |
-| `npx playwright test`: 14 desktop tests and 1 mobile (Pixel 7, touch) test against the production build | **15 / 15 passed** (12.2 min under SwiftShader) |
+| `npx playwright test`: 14 desktop tests and 3 mobile (Pixel 7, touch) tests against the production build | **17 / 17 passed** (desktop 9.0 min, mobile 1.3 min under SwiftShader) |
 
 The browser tests cover the following:
 
@@ -130,4 +130,6 @@ The browser tests cover the following:
 - photo-mode capture;
 - quality-preset persistence;
 - keyboard navigation;
-- the mobile layout: bottom navigation, section switching by tap, a touch tap on the canvas and no horizontal overflow.
+- the mobile layout: bottom navigation, section switching by tap, a touch tap on the canvas and no horizontal overflow;
+- the mobile bottom sheet snapping between peek, half and full;
+- the touch thrust slider driving the engines in flight mode.
