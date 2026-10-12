@@ -7,7 +7,14 @@ import { Group, Mesh, MeshStandardMaterial, type BufferGeometry, type Object3D }
 import type { Vec3 } from './math';
 
 export type MaterialKey =
-  | 'paint' // fuselage / wing upper painted skin
+  | 'livery' // fuselage skin and doors: the painted fuselage atlas
+  | 'wingSkin' // every wing panel: the painted wing atlas
+  | 'nacelle' // fan cowls and reverser sleeves: the nacelle atlas
+  | 'tailSkin' // stabiliser, elevators, fin and rudder: the tail atlas
+  | 'liner' // acoustic liner inside the engine inlet
+  | 'spinner' // fan spinner with its painted spiral
+  | 'lens' // clear light covers
+  | 'paint' // other painted skin
   | 'paintBelly' // grey composite belly & wing lower surfaces
   | 'paintTail' // livery colour on the fin
   | 'composite' // fairings, control-surface composite

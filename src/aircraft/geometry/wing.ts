@@ -10,6 +10,7 @@ import { lerp, piecewise, type Vec3 } from './math';
 import { panel, skinSlab, ordinate, type LiftingSurface } from './lifting';
 import { add, group, mesh, norm, pivoted, scale, sub } from './parts';
 import { gridSurface, merge, orientOutward } from './surface';
+import { lensDome, quad, staticWick, tube } from './details';
 
 const { rootZ, tipZ, kinkZ } = WING;
 
@@ -108,9 +109,20 @@ function hinge(surf: LiftingSurface, s: Span, xc: number, upperOrd: 'mid' | 'upp
   return { pivot: p0, axis };
 }
 
+/**
+ * Wing atlas coordinates, shared by every wing panel so one painted texture (panel lines,
+ * walkways, stencils, soot) runs continuously across slats, box, flaps and ailerons.
+ * u: 0 = left tip, 0.5 = centreline, 1 = right tip. v: 0.5 = leading edge, 1 = upper trailing
+ * edge, 0 = lower trailing edge.
+ */
+export function wingUV(side: 1 | -1): (span: number, xc: number, upper: boolean) => [number, number] {
+  return (span, xc, upper) => [0.5 + 0.5 * side * (span / tipZ), upper ? 0.5 + 0.5 * xc : 0.5 - 0.5 * xc];
+}
+
 export function buildWing(side: 1 | -1, quality: number): Group {
   const S = side === 1 ? 'R' : 'L';
   const surf = wingSurface(side);
+  const uvMap = wingUV(side);
   const nChord = Math.round(22 * quality);
   const g = group(`wing_${S}`, [], `wing`);
 
@@ -137,17 +149,32 @@ export function buildWing(side: 1 | -1, quality: number): Group {
       const a = cuts[k]!;
       const b = cuts[k + 1]!;
       const c0 = isFixedLE((a + b) / 2) ? 0 : LE_FRAC;
-      boxParts.push(panel(surf, a, b, c0, seg.c1, { nChord: c0 === 0 ? nChord + 8 : nChord }));
+      boxParts.push(panel(surf, a, b, c0, seg.c1, { nChord: c0 === 0 ? nChord + 8 : nChord, uvMap }));
     }
   }
-  for (const [k, geo] of boxParts.entries()) g.add(mesh(`wing_${S}_box_${k}`, geo, 'paint', 'wing'));
+  for (const [k, geo] of boxParts.entries()) g.add(mesh(`wing_${S}_box_${k}`, geo, 'wingSkin', 'wing'));
 
   // --- Leading-edge devices
   const leDevice = (s: Span, name: string, partId: string, droop: boolean) => {
-    const geo = panel(surf, s.z0, s.z1, 0, LE_FRAC - 0.002, { nChord: Math.round(16 * quality) });
+    const geo = panel(surf, s.z0, s.z1, 0, LE_FRAC - 0.002, { nChord: Math.round(16 * quality), uvMap });
     const h = hinge(surf, s, droop ? LE_FRAC : LE_FRAC + 0.02, droop ? 'mid' : 'lower', side);
+    const kids = [mesh(`${name}_mesh`, geo, 'wingSkin', partId)];
+    if (!droop) {
+      // two curved tracks per slat, hidden in the wing when stowed and bared when deployed
+      const tracks = [0.25, 0.75].map((f) => {
+        const z = s.z0 + (s.z1 - s.z0) * f;
+        const mid = (xc: number) => (ordinate(surf, z, xc, true) * 0.35 + ordinate(surf, z, xc, false) * 0.65);
+        const pts: Vec3[] = [];
+        for (let k = 0; k <= 6; k++) {
+          const xc = LE_FRAC - 0.03 + k * 0.03;
+          pts.push(surf.map(z, xc, mid(xc) - 0.004 * k));
+        }
+        return tube(pts, 0.032, 8);
+      });
+      kids.push(mesh(`${name}_tracks`, merge(tracks), 'metal', partId));
+    }
     // Positive = leading edge down.
-    const node = pivoted(name, droop ? h.pivot : add(h.pivot, [0, -0.06 * wingChord(s.z0), 0]), [mesh(`${name}_mesh`, geo, 'leadingEdge', partId)], {
+    const node = pivoted(name, droop ? h.pivot : add(h.pivot, [0, -0.06 * wingChord(s.z0), 0]), kids, {
       kind: 'hinge',
       axis: scale(h.axis, -1),
       min: 0,
@@ -159,17 +186,17 @@ export function buildWing(side: 1 | -1, quality: number): Group {
   DROOP_NOSE.forEach((s, k) => g.add(leDevice(s, `droop_${S}${k + 1}`, 'droopNose', true)));
   SLATS.forEach((s, k) => g.add(leDevice(s, `slat_${S}${k + 1}`, 'slat', false)));
   for (const [k, s] of fixedLE.entries()) {
-    g.add(mesh(`wing_${S}_le_${k}`, panel(surf, s.z0, s.z1, 0, LE_FRAC, { nChord: Math.round(16 * quality) }), 'leadingEdge', 'wing'));
+    g.add(mesh(`wing_${S}_le_${k}`, panel(surf, s.z0, s.z1, 0, LE_FRAC, { nChord: Math.round(16 * quality), uvMap }), 'wingSkin', 'wing'));
   }
 
   // --- Flaps (Fowler motion: aft translation + rotation)
   FLAPS.forEach((s, k) => {
     const name = `flap_${S}${k + 1}`;
-    const geo = panel(surf, s.z0 + 0.03, s.z1 - 0.03, FLAP_FRAC + 0.004, 1, { nChord: Math.round(18 * quality) });
+    const geo = panel(surf, s.z0 + 0.03, s.z1 - 0.03, FLAP_FRAC + 0.004, 1, { nChord: Math.round(18 * quality), uvMap });
     const h = hinge(surf, s, FLAP_FRAC + 0.05, 'mid', side);
     const c = wingChord((s.z0 + s.z1) / 2);
     g.add(
-      pivoted(name, h.pivot, [mesh(`${name}_mesh`, geo, 'composite', 'flap')], {
+      pivoted(name, h.pivot, [mesh(`${name}_mesh`, geo, 'wingSkin', 'flap')], {
         kind: 'hinge',
         axis: h.axis,
         min: 0,
@@ -182,24 +209,47 @@ export function buildWing(side: 1 | -1, quality: number): Group {
   // --- Ailerons
   AILERONS.forEach((s, k) => {
     const name = `aileron_${S}${k + 1}`;
-    const geo = panel(surf, s.z0 + 0.03, s.z1 - 0.03, AIL_FRAC + 0.004, 1, { nChord: Math.round(14 * quality) });
+    const geo = panel(surf, s.z0 + 0.03, s.z1 - 0.03, AIL_FRAC + 0.004, 1, { nChord: Math.round(14 * quality), uvMap });
     const h = hinge(surf, s, AIL_FRAC + 0.01, 'mid', side);
-    g.add(pivoted(name, h.pivot, [mesh(`${name}_mesh`, geo, 'composite', 'aileron')], { kind: 'hinge', axis: h.axis, min: -25, max: 25 }, 'aileron'));
+    // static dischargers on the trailing edge
+    const wicks = [0.2, 0.55, 0.85].map((f) => staticWick(surf.map(s.z0 + (s.z1 - s.z0) * f, 0.995, 0), [-1, -0.04, side * 0.1]));
+    g.add(pivoted(name, h.pivot, [mesh(`${name}_mesh`, geo, 'wingSkin', 'aileron'), mesh(`${name}_wicks`, merge(wicks), 'darkMetal', 'aileron')], { kind: 'hinge', axis: h.axis, min: -25, max: 25 }, 'aileron'));
   });
 
   // --- Spoilers (upper surface panels hinged at their leading edge; positive = panel up)
   SPOILERS.forEach((s, k) => {
     const name = `spoiler_${S}${k + 1}`;
-    const geo = skinSlab(surf, s.z0, s.z1, SPOILER_C0, FLAP_FRAC + 0.045, true, 0.035, 0.006);
+    const geo = skinSlab(surf, s.z0, s.z1, SPOILER_C0, FLAP_FRAC + 0.045, true, 0.035, 0.006, uvMap);
     const h = hinge(surf, s, SPOILER_C0, 'upper', side);
-    g.add(pivoted(name, h.pivot, [mesh(`${name}_mesh`, geo, 'paint', 'spoiler')], { kind: 'hinge', axis: scale(h.axis, -1), min: 0, max: 50 }, 'spoiler'));
+    g.add(pivoted(name, h.pivot, [mesh(`${name}_mesh`, geo, 'wingSkin', 'spoiler')], { kind: 'hinge', axis: scale(h.axis, -1), min: 0, max: 50 }, 'spoiler'));
   });
 
   // --- Flap-track fairings (fixed canoes under the trailing edge)
   for (const z of [7.2, 11.6, 17.4, 21.2, 25.6]) g.add(mesh(`fairing_${S}_${z}`, flapTrackFairing(surf, z), 'composite', 'flapTrackFairing'));
 
-  // --- Wing-tip fence (upper & lower)
+  // --- Wing-tip fence (upper & lower), its dischargers and the navigation-light lens
   g.add(mesh(`tipfence_${S}`, tipFence(side), 'paintTail', 'wingtipFence'));
+  {
+    const c = wingChord(tipZ);
+    const fenceTE = (hh: number): Vec3 => {
+      const up = hh >= 0;
+      const le = up ? wingLE(tipZ) + lerp(0, c * 0.95, hh) : wingLE(tipZ) + lerp(0.15 * c, c * 0.9, -hh);
+      const ch = up ? lerp(c * 0.98, 0.35, hh) : lerp(c * 0.85, 0.3, -hh);
+      return [sx(le + ch * 0.98), wingPlaneY(tipZ) + (up ? hh * 1.45 : hh * 0.95), side * (tipZ - 0.02)];
+    };
+    const wicks = [0.25, 0.55, 0.85, -0.5].map((hh) => staticWick(fenceTE(hh), [-1, hh > 0 ? 0.25 : -0.1, 0]));
+    g.add(mesh(`tipfence_${S}_wicks`, merge(wicks), 'darkMetal', 'wingtipFence'));
+    g.add(mesh(`navlight_lens_${S}`, lensDome([sx(wingLE(tipZ) + 1.2), wingPlaneY(tipZ) + 0.05, side * (tipZ + 0.035)], [0, 0, side], [1, 0, 0], 0.22, 0.08, 0.075), 'lens', 'wingtipFence'));
+    // NACA fuel-vent intake on the lower surface near the tip
+    const zv = tipZ - 2.4;
+    const lo = (z: number, xc: number): Vec3 => {
+      const p = surf.map(z, xc, ordinate(surf, z, xc, false));
+      return [p[0], p[1] - 0.004, p[2]];
+    };
+    let v = quad(lo(zv - 0.12, 0.4), lo(zv + 0.12, 0.4), lo(zv + 0.05, 0.46), lo(zv - 0.05, 0.46));
+    if (v.getAttribute('normal').getY(0) > 0) v = quad(lo(zv - 0.05, 0.46), lo(zv + 0.05, 0.46), lo(zv + 0.12, 0.4), lo(zv - 0.12, 0.4));
+    g.add(mesh(`fuel_vent_${S}`, v, 'seal', 'wing'));
+  }
 
   g.userData.engines = ENGINES.filter((e) => e.side === side).map((e) => e.id);
   return g;

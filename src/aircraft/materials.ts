@@ -8,6 +8,7 @@ import {
   Color,
   DoubleSide,
   LinearSRGBColorSpace,
+  Vector2,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   RepeatWrapping,
@@ -15,12 +16,10 @@ import {
   type Material,
   type Texture,
 } from 'three';
-import { L, MAIN_DECK_FLOOR, UPPER_DECK_FLOOR } from './geometry/layout';
-import { fuselagePoint } from './geometry/fuselage';
 import type { MaterialKey } from './geometry/parts';
-
-const TEX_W = 4096;
-const TEX_H = 1024;
+import type { Quality } from '../state/ui';
+import { disposeAtlas, initialAtlas, paintAtlas, type AtlasTextures } from './textures/atlases';
+import type { AtlasKind } from './textures/atlas.worker';
 
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -29,183 +28,6 @@ function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContex
   const ctx = c.getContext('2d');
   if (!ctx) throw new Error('2D canvas unavailable');
   return [c, ctx];
-}
-
-/** Map (station, θ) → texture pixel. θ runs from −π/2 (keel) through starboard, crown and port. */
-const px = (s: number): number => (s / L) * TEX_W;
-const py = (theta: number): number => TEX_H - ((theta + Math.PI / 2) / (Math.PI * 2)) * TEX_H;
-
-/** θ (starboard) at which the section reaches height y. */
-function thetaY(s: number, y: number): number {
-  let lo = -Math.PI / 2;
-  let hi = Math.PI / 2;
-  for (let k = 0; k < 30; k++) {
-    const m = (lo + hi) / 2;
-    if (fuselagePoint(s, m)[1] < y) lo = m;
-    else hi = m;
-  }
-  return (lo + hi) / 2;
-}
-
-/** Fill a horizontal band between two heights on both sides, following the section. */
-function band(ctx: CanvasRenderingContext2D, s0: number, s1: number, y0: (s: number) => number, y1: (s: number) => number, fill: string) {
-  for (const side of [1, -1]) {
-    ctx.beginPath();
-    const steps = 160;
-    for (let i = 0; i <= steps; i++) {
-      const s = s0 + ((s1 - s0) * i) / steps;
-      const t = thetaY(s, y0(s));
-      const th = side === 1 ? t : Math.PI - t;
-      if (i === 0) ctx.moveTo(px(s), py(th));
-      else ctx.lineTo(px(s), py(th));
-    }
-    for (let i = steps; i >= 0; i--) {
-      const s = s0 + ((s1 - s0) * i) / steps;
-      const t = thetaY(s, y1(s));
-      const th = side === 1 ? t : Math.PI - t;
-      ctx.lineTo(px(s), py(th));
-    }
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-  }
-}
-
-function text(ctx: CanvasRenderingContext2D, str: string, s: number, y: number, size: number, color: string, font: string, spacing = 0) {
-  for (const side of [1, -1] as const) {
-    const t = thetaY(s, y);
-    const th = side === 1 ? t : Math.PI - t;
-    ctx.save();
-    ctx.translate(px(s), py(th));
-    // Starboard: s runs right-to-left on screen → mirror horizontally. Port: θ runs downward → flip vertically.
-    if (side === 1) ctx.scale(-1, 1);
-    else ctx.scale(1, -1);
-    ctx.font = `${size}px ${font}`;
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${spacing}px`;
-    ctx.fillText(str, 0, 0);
-    ctx.restore();
-  }
-}
-
-/** Fictional "Digital Twin" demonstrator livery (no real airline or manufacturer branding). */
-export function makeLiveryTextures(): { map: Texture; bump: Texture; rough: Texture } {
-  const [c, ctx] = canvas(TEX_W, TEX_H);
-  ctx.fillStyle = '#f4f5f6';
-  ctx.fillRect(0, 0, TEX_W, TEX_H);
-  // Light grey lower fuselage
-  band(ctx, 0, L, () => 0, () => 3.15, '#c9ced3');
-  // Graphite aft swoosh rising into the fin
-  band(
-    ctx,
-    48,
-    L,
-    (s) => 10.6 - Math.pow(Math.max(0, s - 48) / 24.7, 1.6) * 3.8,
-    () => 12,
-    '#1d2329',
-  );
-  // Ice-blue pin stripe under the main deck windows
-  band(ctx, 7.5, 60.5, (s) => MAIN_DECK_FLOOR + 0.62 + (s > 50 ? (s - 50) * 0.05 : 0), (s) => MAIN_DECK_FLOOR + 0.69 + (s > 50 ? (s - 50) * 0.05 : 0), '#6fd3ef');
-  band(ctx, 52, L, (s) => 10.6 - Math.pow(Math.max(0, s - 48) / 24.7, 1.6) * 3.8 - 0.14, (s) => 10.6 - Math.pow(Math.max(0, s - 48) / 24.7, 1.6) * 3.8 - 0.08, '#6fd3ef');
-  // Weathering (kept subtle): panel-to-panel tone variation, grime on the lower fuselage and
-  // behind the main-gear bays, and APU soot on the tail cone.
-  {
-    let seed = 5;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const joints = [2.3, 5.9, 11.8, 17.3, 22.8, 28.1, 33.5, 39.0, 44.4, 49.6, 54.8, 59.9, 64.6, 68.8, L];
-    for (let k = 0; k < joints.length - 1; k++) {
-      for (const [y0, y1] of [
-        [0, 3.4],
-        [3.4, MAIN_DECK_FLOOR + 1.8],
-        [MAIN_DECK_FLOOR + 1.8, UPPER_DECK_FLOOR + 1.75],
-        [UPPER_DECK_FLOOR + 1.75, 12],
-      ] as const) {
-        ctx.globalAlpha = 0.012 + rnd() * 0.02;
-        band(ctx, joints[k]!, joints[k + 1]!, () => y0, () => y1, rnd() > 0.5 ? '#ffffff' : '#7d838a');
-      }
-    }
-    for (let i = 0; i < 6; i++) {
-      ctx.globalAlpha = 0.018;
-      band(ctx, 31 + i * 0.6, 52 - i * 0.4, () => 0, () => 2.2 + i * 0.25, '#4b4f55');
-    }
-    for (let i = 0; i < 8; i++) {
-      ctx.globalAlpha = 0.035;
-      band(ctx, 64 + i * 0.9, L, () => 0, () => 12, '#2b2a28');
-    }
-    ctx.globalAlpha = 1;
-  }
-  // Black anti-glare / cockpit window surround
-  text(ctx, 'A380', 22.5, UPPER_DECK_FLOOR + 1.0, 64, '#1d2329', '300 "Inter", "Helvetica Neue", Arial, sans-serif', 18);
-  text(ctx, 'DIGITAL TWIN', 33.5, UPPER_DECK_FLOOR + 1.0, 46, '#1d2329', '500 "Inter", "Helvetica Neue", Arial, sans-serif', 24);
-  text(ctx, 'DT-A380', 60.6, MAIN_DECK_FLOOR + 1.15, 30, '#1d2329', '500 "Inter", Arial, sans-serif', 4);
-
-  // Panel line bump map
-  const [b, bctx] = canvas(TEX_W, TEX_H);
-  bctx.fillStyle = '#808080';
-  bctx.fillRect(0, 0, TEX_W, TEX_H);
-  bctx.strokeStyle = '#3a3a3a';
-  bctx.lineWidth = 1.4;
-  // Circumferential joints (major section breaks + regular skin panels)
-  const joints = [2.3, 5.9, 11.8, 17.3, 22.8, 28.1, 33.5, 39.0, 44.4, 49.6, 54.8, 59.9, 64.6, 68.8];
-  for (const s of joints) {
-    bctx.beginPath();
-    bctx.moveTo(px(s), 0);
-    bctx.lineTo(px(s), TEX_H);
-    bctx.stroke();
-  }
-  // Longitudinal lap joints at fixed heights
-  bctx.lineWidth = 1.1;
-  for (const y of [3.4, 4.6, MAIN_DECK_FLOOR + 1.8, UPPER_DECK_FLOOR + 0.25, UPPER_DECK_FLOOR + 1.75, 9.9]) {
-    for (const side of [1, -1]) {
-      bctx.beginPath();
-      for (let s = 10; s <= 62; s += 0.5) {
-        const t = thetaY(s, y);
-        const th = side === 1 ? t : Math.PI - t;
-        if (s === 10) bctx.moveTo(px(s), py(th));
-        else bctx.lineTo(px(s), py(th));
-      }
-      bctx.stroke();
-    }
-  }
-  // Access panels on the lower fuselage
-  bctx.lineWidth = 1;
-  for (let s = 13; s < 58; s += 3.7) {
-    for (const side of [1, -1]) {
-      const t = thetaY(s, 3.0);
-      const th = side === 1 ? t : Math.PI - t;
-      bctx.strokeRect(px(s), py(th) - 6, 26, 12);
-    }
-  }
-  // Fastener rows: subtle dotted lines along joints
-  bctx.fillStyle = '#6c6c6c';
-  for (const s of joints) for (let y = 0; y < TEX_H; y += 5) bctx.fillRect(px(s) + 3, y, 1, 1);
-
-  // Roughness: gloss paint with gentle variation
-  const [r, rctx] = canvas(512, 128);
-  const img = rctx.createImageData(512, 128);
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const v = 92 + rnd() * 26;
-    img.data[i] = v;
-    img.data[i + 1] = v;
-    img.data[i + 2] = v;
-    img.data[i + 3] = 255;
-  }
-  rctx.putImageData(img, 0, 0);
-
-  const map = new CanvasTexture(c);
-  map.colorSpace = SRGBColorSpace;
-  map.anisotropy = 8;
-  const bump = new CanvasTexture(b);
-  bump.colorSpace = LinearSRGBColorSpace;
-  bump.anisotropy = 8;
-  const rough = new CanvasTexture(r);
-  rough.colorSpace = LinearSRGBColorSpace;
-  rough.wrapS = rough.wrapT = RepeatWrapping;
-  return { map, bump, rough };
 }
 
 /** Small tiling noise used to break up uniform surfaces. */
@@ -288,6 +110,37 @@ const carpetMap = () =>
     }
   });
 
+/** Acoustic liner: a fine grid of perforations. */
+const linerBump = () =>
+  tile(128, [60, 14], false, (ctx) => {
+    ctx.fillStyle = '#9a9a9a';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#3a3a3a';
+    for (let y = 0; y < 128; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < 128; x += 8) ctx.fillRect(x + 2, y + 2, 3, 3);
+  });
+
+/** Spinner: polished metal with a white spiral (reduces bird strikes, signals rotation to ground crew). */
+function spinnerMap(): Texture {
+  const [c, ctx] = canvas(256, 512);
+  const img = ctx.createImageData(256, 512);
+  for (let y = 0; y < 512; y++)
+    for (let x = 0; x < 256; x++) {
+      const u = x / 256; // along the spinner, tip at 1
+      const v = y / 512; // around
+      const f = (((v - u * 0.9) % 1) + 1) % 1;
+      const white = f < 0.09 && u > 0.12;
+      const o = (y * 256 + x) * 4;
+      const g = white ? 245 : 120;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = g;
+      img.data[o + 3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  t.wrapT = RepeatWrapping;
+  return t;
+}
+
 /** Seat-back entertainment screen: a moving-map style idle screen. */
 function ifeTexture(): Texture {
   const [c, ctx] = canvas(256, 160);
@@ -326,13 +179,66 @@ function ifeTexture(): Texture {
   return t;
 }
 
-export type MaterialLibrary = Record<MaterialKey | 'livery', Material>;
+export type MaterialLibrary = Record<MaterialKey, Material>;
+
+/** Atlas-textured skins: map + normal + packed roughness (G) / metalness (B). */
+function atlasMaterial(t: AtlasTextures, o: { clearcoat: number; clearcoatRoughness: number; normal: number }): MeshPhysicalMaterial {
+  return new MeshPhysicalMaterial({
+    map: t.map,
+    normalMap: t.normalMap,
+    normalScale: new Vector2(o.normal, o.normal),
+    roughnessMap: t.ormMap,
+    metalnessMap: t.ormMap,
+    roughness: 1,
+    metalness: 1,
+    clearcoat: o.clearcoat,
+    clearcoatRoughness: o.clearcoatRoughness,
+    clearcoatNormalMap: t.normalMap,
+    clearcoatNormalScale: new Vector2(o.normal * 0.7, o.normal * 0.7),
+  });
+}
+
+const atlasOwners: Partial<Record<AtlasKind, { tex: AtlasTextures; materials: MeshPhysicalMaterial[] }>> = {};
+let atlasQuality: Quality | null = null;
+
+/**
+ * Repaint the skin atlases for a graphics preset and swap them into the shared materials.
+ * Resolves once every atlas is in place (painting runs in a worker).
+ */
+export async function setAtlasQuality(q: Quality, onSwap?: () => void): Promise<void> {
+  if (atlasQuality === q) return;
+  atlasQuality = q;
+  getMaterials();
+  for (const kind of ['fuselage', 'wing', 'tail', 'nacelle', 'tyre'] as AtlasKind[]) {
+    const t = await paintAtlas(kind, q);
+    if (!t || atlasQuality !== q) {
+      if (t) disposeAtlas(t);
+      continue;
+    }
+    const owner = atlasOwners[kind];
+    if (!owner) continue;
+    for (const m of owner.materials) {
+      if (m.map && t.map) m.map = t.map;
+      m.normalMap = t.normalMap;
+      if (m.clearcoatNormalMap) m.clearcoatNormalMap = t.normalMap;
+      m.roughnessMap = t.ormMap;
+      if (m.metalnessMap) m.metalnessMap = t.ormMap;
+    }
+    disposeAtlas(owner.tex);
+    owner.tex = t;
+    onSwap?.();
+  }
+}
 
 let library: MaterialLibrary | null = null;
 
 export function getMaterials(): MaterialLibrary {
   if (library) return library;
-  const livery = makeLiveryTextures();
+  const fus = initialAtlas('fuselage');
+  const wingTex = initialAtlas('wing');
+  const nac = initialAtlas('nacelle');
+  const tailTex = initialAtlas('tail');
+  const tyreTex = initialAtlas('tyre');
   const noise = noiseTexture();
   const fine = noiseTexture(256, 128, 70, 41);
   fine.repeat.set(24, 24);
@@ -348,28 +254,25 @@ export function getMaterials(): MaterialLibrary {
   const ife = ifeTexture();
 
   library = {
-    livery: new MeshPhysicalMaterial({
-      map: livery.map,
-      bumpMap: livery.bump,
-      bumpScale: 0.55,
-      roughness: 0.26,
-      roughnessMap: livery.rough,
-      metalness: 0,
-      clearcoat: 0.85,
-      clearcoatRoughness: 0.1,
-    }),
+    livery: atlasMaterial(fus, { clearcoat: 0.85, clearcoatRoughness: 0.08, normal: 1 }),
+    wingSkin: atlasMaterial(wingTex, { clearcoat: 0.35, clearcoatRoughness: 0.28, normal: 1 }),
+    nacelle: atlasMaterial(nac, { clearcoat: 0.75, clearcoatRoughness: 0.1, normal: 1 }),
+    tailSkin: atlasMaterial(tailTex, { clearcoat: 0.7, clearcoatRoughness: 0.12, normal: 1 }),
+    lens: new MeshPhysicalMaterial({ color: new Color('#eef4f8'), roughness: 0.03, metalness: 0, transparent: true, opacity: 0.32, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.5, depthWrite: false }),
+    liner: phys('#2b2f33', 0.7, 0.2, { bumpMap: linerBump(), bumpScale: 0.8 }),
+    spinner: phys('#ffffff', 0.25, 0.85, { map: spinnerMap(), clearcoat: 0.4 }),
     paint: paint('#f1f2f3', 0.3),
     paintBelly: paint('#c3c8cd', 0.38, { clearcoat: 0.5 }),
     paintTail: paint('#1d2329', 0.28),
     composite: paint('#e2e5e8', 0.42, { clearcoat: 0.35 }),
     // painted leading edges and slats, slightly satin from erosion
     leadingEdge: paint('#d9dde1', 0.36, { clearcoat: 0.25, metalness: 0.08 }),
-    inletLip: phys('#dde1e5', 0.12, 1, { anisotropy: 0.6, roughnessMap: fine }),
+    inletLip: phys('#dde1e5', 0.3, 1, { anisotropy: 0.6, roughnessMap: fine }),
     metal: phys('#a9adb2', 0.32, 1, { anisotropy: 0.4 }),
     darkMetal: std('#3a3e43', 0.5, 0.6),
     gearPaint: phys('#d6d9dc', 0.34, 0, { clearcoat: 0.45, clearcoatRoughness: 0.25, roughnessMap: noise }),
     chrome: phys('#f3f5f7', 0.05, 1),
-    tyre: phys('#18191a', 0.78, 0, { roughnessMap: fine, sheen: 0.25, sheenColor: new Color('#3a3a3a'), sheenRoughness: 0.8 }),
+    tyre: phys('#18191a', 1, 0, { roughnessMap: tyreTex.ormMap, normalMap: tyreTex.normalMap, normalScale: new Vector2(1.2, 1.2), sheen: 0.25, sheenColor: new Color('#3a3a3a'), sheenRoughness: 0.8 }),
     hub: phys('#b6babf', 0.3, 1, { anisotropy: 0.3 }),
     glass: new MeshPhysicalMaterial({ color: new Color('#0d171d'), roughness: 0.02, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.01, specularIntensity: 1, ior: 1.6, envMapIntensity: 2.2 }),
     window: new MeshPhysicalMaterial({ color: new Color('#0b1116'), roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.55, envMapIntensity: 1.8 }),
@@ -400,5 +303,12 @@ export function getMaterials(): MaterialLibrary {
     emissiveCabin: emissive('#fff4e0', 1.6),
   };
   for (const m of Object.values(library)) m.name ||= 'lib';
+  library.tyre.userData.tyre = true; // X-ray/highlight variants keep the contact-patch squash
+  const L = library as Record<MaterialKey, MeshPhysicalMaterial>;
+  atlasOwners.fuselage = { tex: fus, materials: [L.livery] };
+  atlasOwners.wing = { tex: wingTex, materials: [L.wingSkin] };
+  atlasOwners.nacelle = { tex: nac, materials: [L.nacelle] };
+  atlasOwners.tail = { tex: tailTex, materials: [L.tailSkin] };
+  atlasOwners.tyre = { tex: tyreTex, materials: [L.tyre] };
   return library;
 }

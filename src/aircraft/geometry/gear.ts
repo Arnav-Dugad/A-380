@@ -10,6 +10,7 @@ import { GEAR, sx } from './layout';
 import type { Vec3 } from './math';
 import { group, mesh, pivoted } from './parts';
 import { gridSurface, lathe, merge, orientOutward } from './surface';
+import { lensDome } from './details';
 import { bellyFairingPoint, fuselageNormal, fuselagePoint } from './fuselage';
 
 const MAIN_TYRE_R = 0.7; // [V] 1400x530R23 main tyres
@@ -209,6 +210,36 @@ function noseGear(quality: number): Group {
       wheel('nose_wheel_L', [axle[0], axle[1], -0.475], NOSE_TYRE_R, NOSE_TYRE_W, -1, quality),
       wheel('nose_wheel_R', [axle[0], axle[1], 0.475], NOSE_TYRE_R, NOSE_TYRE_W, 1, quality),
       mesh('nose_taxi_light_mount', box([axle[0] + 0.2, axle[1] + 0.95, 0], [0.12, 0.18, 0.5]), 'darkMetal', 'noseGear'),
+      // taxi and take-off lamps facing forward, runway turn-off lamps splayed outward
+      mesh(
+        'nose_lamp_reflectors',
+        merge(
+          [
+            [0.12, 0],
+            [-0.12, 0],
+            [0.22, 0.5],
+            [-0.22, -0.5],
+          ].map(([dz, yaw]) => {
+            const c: Vec3 = [axle[0] + 0.262, axle[1] + 0.95, dz!];
+            return cylinder(c, [c[0] + 0.012 * Math.cos(yaw!), c[1], c[2] + 0.012 * Math.sin(yaw!)], 0.06, 16);
+          }),
+        ),
+        'chrome',
+        'noseGear',
+      ),
+      mesh(
+        'nose_lamp_lenses',
+        merge(
+          [
+            [0.12, 0],
+            [-0.12, 0],
+            [0.22, 0.5],
+            [-0.22, -0.5],
+          ].map(([dz, yaw]) => lensDome([axle[0] + 0.272, axle[1] + 0.95, dz!], [Math.cos(yaw!), 0, Math.sin(yaw!)], [0, 1, 0], 0.065, 0.065, 0.02, 12)),
+        ),
+        'lens',
+        'noseGear',
+      ),
     ],
     { kind: 'hinge', axis: [0, 1, 0], min: -70, max: 70 },
     'noseGear',
@@ -248,7 +279,13 @@ function bayDoor(name: string, f: (u: number, v: number) => Vec3, side: 1 | -1, 
   const a = f(0, 0);
   const b = f(1, 0);
   const pivot: Vec3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-  return pivoted(name, pivot, [mesh(`${name}_skin`, thicken(geo, 0.03), 'paintBelly', partId)], { kind: 'hinge', axis: [-side, 0, 0], min: 0, max: 88 }, partId);
+  // door actuator: a rod from the inner face up into the bay, seen when the door stands open
+  const m = f(0.5, 0.65);
+  const nn = geo.getAttribute('normal');
+  const k = Math.floor(nn.count / 2);
+  const inward: Vec3 = [-nn.getX(k), -nn.getY(k), -nn.getZ(k)];
+  const rod = merge([cylinder(m, [m[0] + inward[0] * 0.5, m[1] + inward[1] * 0.5, m[2] + inward[2] * 0.5], 0.025, 10), cylinder(m, [m[0] + inward[0] * 0.08, m[1] + inward[1] * 0.08, m[2] + inward[2] * 0.08], 0.05, 12)]);
+  return pivoted(name, pivot, [mesh(`${name}_skin`, thicken(geo, 0.03), 'paintBelly', partId), mesh(`${name}_actuator`, rod, 'chrome', partId)], { kind: 'hinge', axis: [-side, 0, 0], min: 0, max: 88 }, partId);
 }
 
 const fusPatch = (s0: number, s1: number, th0: number, th1: number, off: number) => (u: number, v: number): Vec3 => {
@@ -331,10 +368,24 @@ function mainGear(kind: 'wing' | 'body', side: 1 | -1, quality: number): Group {
       'metal',
       'brakes',
     );
+    // piston housings on the inboard faces of the wheels, with brake rods to the bogie beam
+    const housing: BufferGeometry[] = [];
+    for (const dir of [1, -1] as const) {
+      const face = dir === 1 ? z - tw + MAIN_TYRE_W / 2 - 0.02 : z + tw - MAIN_TYRE_W / 2 + 0.02;
+      const c0: Vec3 = [ax, MAIN_TYRE_R, face];
+      housing.push(cylinder(c0, [ax, MAIN_TYRE_R, face + dir * 0.07], 0.27, 22));
+      for (let p = 0; p < 8; p++) {
+        const a = (p / 8) * Math.PI * 2 + 0.2;
+        const pc: Vec3 = [ax + Math.cos(a) * 0.2, MAIN_TYRE_R + Math.sin(a) * 0.2, face + dir * 0.07];
+        housing.push(cylinder(pc, [pc[0], pc[1], pc[2] + dir * 0.05], 0.034, 10));
+      }
+      housing.push(cylinder([ax + 0.05, MAIN_TYRE_R + 0.22, face + dir * 0.05], [ax + 0.42, bogieY + 0.08, z - dir * 0.12], 0.028, 10));
+    }
+    const housings = mesh(`${id}_brakehousing${k + 1}`, merge(housing), 'darkMetal', 'brakes');
     const isSteer = kind === 'body' && k === 0; // rear axle (largest s → first after ordering)
     if (isSteer) {
-      bogieParts.push(pivoted(`${id}_steer_axle`, [ax, MAIN_TYRE_R, z], [axleMesh, brakes, ...wheelsOnAxle], { kind: 'hinge', axis: [0, 1, 0], min: -15, max: 15 }, `${kind}Gear`));
-    } else bogieParts.push(axleMesh, brakes, ...wheelsOnAxle);
+      bogieParts.push(pivoted(`${id}_steer_axle`, [ax, MAIN_TYRE_R, z], [axleMesh, brakes, housings, ...wheelsOnAxle], { kind: 'hinge', axis: [0, 1, 0], min: -15, max: 15 }, `${kind}Gear`));
+    } else bogieParts.push(axleMesh, brakes, housings, ...wheelsOnAxle);
   });
   const bogie = pivoted(`${id}_bogie`, bogieC, bogieParts, { kind: 'hinge', axis: [0, 0, 1], min: -95, max: 95 }, `${kind}Gear`);
 

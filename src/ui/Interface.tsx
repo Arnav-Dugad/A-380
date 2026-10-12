@@ -7,6 +7,10 @@ import { HoverLabel } from './HoverLabel';
 import { Icon } from './icons';
 import { Inspector } from './Inspector';
 import { Panel, cx } from './kit';
+import { RenderPanel } from './RenderPanel';
+import { ToolPanelHost } from './ToolPanels';
+import { useTools } from '../tools/toolsState';
+import { useRender } from '../render/renderState';
 import { SettingsPanel } from './Settings';
 import { BottomSheet, NAV_H } from './Sheet';
 import { StatusStrip } from './StatusStrip';
@@ -105,7 +109,11 @@ export function Interface() {
   const section = useUI((s) => s.section);
   const set = useUI((s) => s.set);
   const sheetSnap = useUI((s) => s.sheet);
-  const showInspector = !!selected && !IMMERSIVE.has(section);
+  const rendered = useRender((s) => s.shading === 'rendered');
+  const toolPanel = useTools((s) => s.panel);
+  const pick = useTools((s) => s.pick);
+  const story = useTools((s) => s.story >= 0);
+  const showInspector = !!selected && !IMMERSIVE.has(section) && !rendered && !toolPanel;
 
   // Each section opens the sheet at a sensible height; a new selection reveals the inspector.
   useEffect(() => set({ sheet: IMMERSIVE.has(section) ? 'peek' : 'half' }), [section, set]);
@@ -121,6 +129,8 @@ export function Interface() {
 
   const desktopPanel = useInset('panel', 'left', introDone && layout === 'desktop' && !collapsed);
   const desktopInspector = useInset('inspector', 'right', introDone && layout === 'desktop' && showInspector);
+  const renderPanel = useInset('render', 'right', introDone && layout === 'desktop' && rendered);
+  const toolInset = useInset('tool', 'right', introDone && layout === 'desktop' && !!toolPanel);
   const sheet = useInset('sheet', 'bottom', introDone && layout === 'sheet');
   const side = useInset('side', 'left', introDone && layout === 'side' && sheetSnap !== 'peek');
 
@@ -135,7 +145,7 @@ export function Interface() {
 
       {layout === 'desktop' && (
         <>
-          <div ref={desktopPanel} className={cx('pointer-events-none absolute bottom-5 left-5 top-[84px] flex w-[340px] flex-col', collapsed && 'hidden')}>
+          <div ref={desktopPanel} className={cx('pointer-events-none absolute bottom-5 left-5 top-[84px] flex w-[340px] flex-col', (collapsed || story) && 'hidden')}>
             <Panel className="flex max-h-full w-full flex-col overflow-hidden">
               <SectionBody />
             </Panel>
@@ -143,6 +153,16 @@ export function Interface() {
           {showInspector && (
             <div ref={desktopInspector} className="pointer-events-none absolute right-5 top-[84px] z-10 flex justify-end">
               <Inspector />
+            </div>
+          )}
+          {toolPanel && (
+            <div ref={toolInset} className="pointer-events-auto absolute bottom-5 top-[84px] z-10 flex flex-col items-end" style={{ right: rendered ? 332 : 20 }}>
+              <ToolPanelHost />
+            </div>
+          )}
+          {rendered && (
+            <div ref={renderPanel} className="pointer-events-auto absolute bottom-5 right-5 top-[84px] z-10 flex flex-col items-end">
+              <RenderPanel />
             </div>
           )}
           <button
@@ -156,13 +176,23 @@ export function Interface() {
         </>
       )}
 
-      {layout === 'sheet' && (
+      {pick !== 'none' && (
+        <div className={cx('pointer-events-none absolute left-1/2 z-20 -translate-x-1/2', mobile ? 'top-[58px]' : 'top-[84px]')}>
+          <div className="a380-enter rounded-full border border-[#ffd166]/30 bg-graphite-950/85 px-3.5 py-1.5 text-[11.5px] text-paper shadow-lg backdrop-blur">
+            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#ffd166] align-middle" />
+            {pick === 'measure' ? 'Click two points on the aircraft to measure' : 'Click the aircraft to pin a note'}
+            <span className="ml-2 text-graphite-400">Esc to finish</span>
+          </div>
+        </div>
+      )}
+
+      {layout === 'sheet' && !story && (
         <BottomSheet innerRef={sheet} label={`${section} panel`}>
           {body}
         </BottomSheet>
       )}
 
-      {layout === 'side' && (
+      {layout === 'side' && !story && (
         <div
           ref={side}
           className="pointer-events-none absolute left-2 top-[56px] flex w-[min(320px,46vw)] flex-col"
@@ -194,6 +224,18 @@ export function Interface() {
         </div>
       )}
 
+      {mobile && rendered && (
+        <div className="pointer-events-auto absolute inset-x-2 top-[58px] z-20 flex max-h-[calc(100dvh-58px-170px)] flex-col">
+          <RenderPanel compact />
+        </div>
+      )}
+
+      {mobile && toolPanel && !modal && (
+        <Modal layout={layout} onClose={() => useTools.getState().set({ panel: null, pick: 'none' })}>
+          <ToolPanelHost wide />
+        </Modal>
+      )}
+
       {modal && (
         <Modal layout={layout} onClose={() => setModal(null)}>
           {modal === 'settings' ? <SettingsPanel onClose={() => setModal(null)} wide={mobile} /> : <HelpPanel onClose={() => setModal(null)} wide={mobile} />}
@@ -202,7 +244,7 @@ export function Interface() {
 
       {/* Telemetry and toasts: bottom centre on desktop, under the top bar on phones */}
       <div className={cx('pointer-events-none absolute left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2', mobile ? 'top-[60px] w-[calc(100%-24px)]' : 'bottom-5')}>
-        {!(mobile && section === 'flight') && <Toasts max={mobile ? 1 : 3} />}
+        {!(mobile && (section === 'flight' || rendered)) && <Toasts max={mobile ? 1 : 3} />}
         {!mobile && <StatusStrip />}
       </div>
 

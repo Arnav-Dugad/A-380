@@ -8,6 +8,7 @@ import { ENVIRONMENTS } from '../TopBar';
 import { Button, Group, ScrollArea, SectionTitle, cx } from '../kit';
 import { Icon, type IconName } from '../icons';
 import { useTouch } from '../useMedia';
+import { resetPushback, startPushback, useOps } from '../../scene/airport/GroundOps';
 
 const HERO: { icon: IconName; value: string; unit: string; label: string }[] = [
   { icon: 'ruler', value: '72.7', unit: 'm', label: 'Length' },
@@ -25,6 +26,8 @@ export function ExplorePanel() {
   const [msg, setMsg] = useState<string | null>(null);
   const demo = (d: Parameters<typeof runDemo>[0]) => setMsg(runDemo(d));
   const touch = useTouch();
+  const pushback = useOps((s) => s.pushback);
+  const bridges = useOps((s) => s.bridges);
   return (
     <ScrollArea className="max-h-full">
       <SectionTitle eyebrow="Explore" title="Airbus A380-800">
@@ -81,6 +84,9 @@ export function ExplorePanel() {
           <Button size="sm" icon="door" onClick={() => demo('cargo')}>
             Cargo doors
           </Button>
+          <Button size="sm" icon="stairs" onClick={() => demo('evacuate')}>
+            Evacuation slides
+          </Button>
           <Button
             size="sm"
             icon="bulb"
@@ -93,6 +99,16 @@ export function ExplorePanel() {
             Exterior lights
           </Button>
         </div>
+        {env === 'apron' && (
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            <Button size="sm" icon="reset" active={pushback !== 'idle'} onClick={() => (pushback === 'idle' ? setMsg(startPushback()) : (resetPushback(), setMsg('Aircraft back on stand')))}>
+              {pushback === 'idle' ? 'Pushback' : 'Back to stand'}
+            </Button>
+            <Button size="sm" icon="stairs" active={bridges > 0.5} disabled={pushback !== 'idle'} onClick={() => useOps.getState().set({ bridges: bridges > 0.5 ? 0 : 1 })}>
+              {bridges > 0.5 ? 'Retract bridges' : 'Dock bridges'}
+            </Button>
+          </div>
+        )}
         {maintenance && (
           <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11.5px] text-graphite-300">
             <span>Aircraft on maintenance jacks</span>

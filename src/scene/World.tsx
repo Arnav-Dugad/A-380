@@ -16,6 +16,7 @@ import {
   InstancedBufferAttribute,
   InstancedMesh,
   MathUtils,
+  Matrix4,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
@@ -25,6 +26,7 @@ import {
   Vector3,
   type Mesh,
 } from 'three';
+import { useRender } from '../render/renderState';
 import { useUI, type EnvPreset, type Weather } from '../state/ui';
 import { Airport } from './airport/Airport';
 import { STAND } from './airport/layout';
@@ -382,6 +384,9 @@ function Hangar() {
   );
 }
 
+const pushTmp = new Matrix4();
+const isIdentity = (m: Matrix4) => m.elements.every((v, i) => v === (i % 5 === 0 ? 1 : 0));
+
 // ------------------------------------------------------------------ main
 export function World() {
   const env = useUI((s) => s.env);
@@ -390,6 +395,7 @@ export function World() {
   const quality = useUI((s) => s.quality);
   const timeOfDay = useUI((s) => s.timeOfDay);
   const exposure = useUI((s) => s.exposure);
+  const shading = useRender((s) => s.shading);
   const flight = section === 'flight';
   const look = useMemo(() => currentLook(), [env, weather, section, timeOfDay]); // eslint-disable-line react-hooks/exhaustive-deps
   const scene = useThree((s) => s.scene);
@@ -436,6 +442,11 @@ export function World() {
       g.updateMatrix();
       const p = new Vector3(STAND.x, 0, STAND.z).applyEuler(g.rotation);
       g.position.set(-p.x, 0, -p.z);
+      // pushback: the aircraft stays at the origin, so the world moves by the inverse pose
+      if (!isIdentity(worldFrame.push)) {
+        g.updateMatrix();
+        pushTmp.copy(worldFrame.push).invert().multiply(g.matrix).decompose(g.position, g.quaternion, g.scale);
+      }
     }
     // keep the shadow frustum centred on the aircraft
     const s = sun.current;
@@ -512,7 +523,7 @@ export function World() {
       {outdoor && !look.night && <Sky distance={45000} sunPosition={sunDir.clone().multiplyScalar(1000).toArray()} turbidity={4 + w.grey * 8} rayleigh={look.sunElevation < 10 ? 2.5 : 1.2} mieCoefficient={0.006} mieDirectionalG={0.85} />}
       {outdoor && look.night && <Stars radius={4000} depth={200} count={4000} factor={60} saturation={0} fade speed={0.2} />}
 
-      {setStudio && <Studio reflective={quality === 'ultra' || quality === 'high'} />}
+      {setStudio && <Studio reflective={(quality === 'ultra' || quality === 'high') && shading === 'material'} />}
       {setHangar && <Hangar />}
 
       <group ref={world} name="world">

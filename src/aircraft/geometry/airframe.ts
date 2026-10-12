@@ -21,6 +21,7 @@ import { deg, type Vec3 } from './math';
 import { group, mesh, pivoted } from './parts';
 import { lathe, merge, orientOutward } from './surface';
 import { box, cylinder } from './gear';
+import { lensDome, strip } from './details';
 
 const WIN_W = 0.27;
 const WIN_H = 0.38;
@@ -83,7 +84,7 @@ export function buildWindows(): { glass: BufferGeometry; frames: BufferGeometry 
 }
 
 /** Flight-deck glazing: 2 windshields + 2 side windows per side (corners in s, θ). */
-const COCKPIT_PANES: [number, number][][] = [
+export const COCKPIT_PANES: [number, number][][] = [
   [
     [3.12, deg(89.2)],
     [3.5, deg(58)],
@@ -130,7 +131,7 @@ function doorNode(d: DoorInfo): Group {
   const n = Math.round(((d.w + d.h) * 2) / 0.06);
   const outline = resample(roundedRect(d.w, d.h, d.deck === 'cargo' ? 0.12 : 0.2, 5), n);
   const seal = resample(roundedRect(d.w + 0.06, d.h + 0.06, d.deck === 'cargo' ? 0.14 : 0.23, 5), n);
-  const panel = conformalShape(d.side, d.s, d.y, outline, 0.022, 8);
+  const panel = conformalShape(d.side, d.s, d.y, outline, 0.022, 8, true);
   const sealGeo = conformalShape(d.side, d.s, d.y, seal, 0.008, 8);
   const centre = surfaceAt(d.side, d.s, d.y, 0);
   const partId = d.deck === 'cargo' ? 'cargoDoor' : 'passengerDoor';
@@ -138,12 +139,12 @@ function doorNode(d: DoorInfo): Group {
   if (d.deck === 'cargo') {
     // Upward-opening, hinged along the top edge.
     const hingePt = surfaceAt(d.side, d.s, d.y + d.h / 2, 0.022);
-    g.add(pivoted(`door_${d.id}_panel`, hingePt, [mesh(`door_${d.id}_skin`, panel, 'paint', partId)], { kind: 'hinge', axis: [-d.side, 0, 0], min: 0, max: 95 }, partId));
+    g.add(pivoted(`door_${d.id}_panel`, hingePt, [mesh(`door_${d.id}_skin`, panel, 'livery', partId)], { kind: 'hinge', axis: [-d.side, 0, 0], min: 0, max: 95 }, partId));
   } else {
     // Plug door: lifts, moves outboard, then translates forward parallel to the fuselage.
     const n = fuselageNormal(d.s, thetaAtHeight(d.s, d.y, d.side));
     g.add(
-      pivoted(`door_${d.id}_panel`, centre, [mesh(`door_${d.id}_skin`, panel, 'paint', partId)], {
+      pivoted(`door_${d.id}_panel`, centre, [mesh(`door_${d.id}_skin`, panel, 'livery', partId)], {
         kind: 'door',
         travel: [1.32, 0.05, n[2] * 0.42],
       }, partId),
@@ -270,9 +271,79 @@ function packInlets(): BufferGeometry {
   return merge(parts);
 }
 
+/** Point and outward normal on the skin at (s, θ), pushed out by `off`. */
+function skinST(s: number, th: number, off = 0): { p: Vec3; n: Vec3 } {
+  const p = fuselagePoint(s, th);
+  const n = fuselageNormal(s, th);
+  return { p: [p[0] + n[0] * off, p[1] + n[1] * off, p[2] + n[2] * off], n };
+}
+
+/** Windshield wipers parked along the lower edge of each windshield. */
+function wipers(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const mirror of [false, true]) {
+    const th = (deg_: number) => (mirror ? Math.PI - deg(deg_) : deg(deg_));
+    const pivot = skinST(3.52, th(60.5), 0.03);
+    const pts = [0, 0.33, 0.66, 1].map((t) => skinST(3.5 - 0.3 * t, th(60.5 + 26 * t), 0.035));
+    // pivot boss, arm (two segments following the curvature), blade just above the glass
+    parts.push(cylinder(skinST(3.52, th(60.5), 0).p, pivot.p, 0.03, 12));
+    for (let k = 0; k < 2; k++) parts.push(strip(pts[k]!.p, pts[k + 1]!.p, pts[k]!.n, 0.022, 0.012));
+    const blade = [0.15, 0.5, 0.85, 1].map((t) => skinST(3.47 - 0.3 * t, th(61 + 26 * t), 0.024));
+    for (let k = 0; k < 3; k++) parts.push(strip(blade[k]!.p, blade[k + 1]!.p, blade[k]!.n, 0.014, 0.01));
+  }
+  return merge(parts);
+}
+
+/** Outflow valves on the aft lower fuselage: dark recess with louvres. */
+function outflowValves(): { recess: BufferGeometry; louvres: BufferGeometry } {
+  const recess: BufferGeometry[] = [];
+  const louvres: BufferGeometry[] = [];
+  for (const side of [1, -1] as const) {
+    recess.push(conformalShape(side, 55.5, 3.3, roundedRect(0.56, 0.38, 0.06, 3), 0.004, 2));
+    for (const dy of [-0.1, 0, 0.1]) {
+      const a = surfaceAt(side, 55.25, 3.3 + dy, 0.012);
+      const b = surfaceAt(side, 55.75, 3.3 + dy, 0.012);
+      const n = fuselageNormal(55.5, thetaAtHeight(55.5, 3.3 + dy, side));
+      louvres.push(strip(a, b, n, 0.05, 0.008));
+    }
+  }
+  return { recess: merge(recess), louvres: merge(louvres) };
+}
+
+/** Light covers: landing lights in the belly fairing, wing-scan lights, beacon domes. */
+function lightLenses(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (const side of [1, -1] as const) {
+    // landing lights in the belly fairing ahead of the wing root
+    let t = 0.1;
+    for (let k = 0; k < 40 && bellyFairingPoint(26.5, t, side)[1] > 3.6; k++) t += 0.02;
+    const p = bellyFairingPoint(26.5, t, side);
+    const q = bellyFairingPoint(26.5, t + 0.02, side);
+    const r = bellyFairingPoint(26.6, t, side);
+    const n = (() => {
+      const a: Vec3 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+      const b: Vec3 = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+      const c: Vec3 = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+      const l = Math.hypot(...c) || 1;
+      const out: Vec3 = [c[0] / l, c[1] / l, c[2] / l];
+      return out[2] * side < 0 ? ([-out[0], -out[1], -out[2]] as Vec3) : out;
+    })();
+    parts.push(lensDome(p, n, [1, 0, 0], 0.28, 0.16, 0.035));
+    // wing-scan lights on the fuselage side above the wing root
+    const w = skinAt(24, 6.9, side);
+    parts.push(lensDome(w.p, w.n, [1, 0, 0], 0.11, 0.07, 0.03));
+  }
+  // anti-collision beacons: domes over the crown and under the belly
+  const top = fuselagePoint(34, Math.PI / 2);
+  parts.push(lensDome([top[0], top[1] - 0.01, 0], [0, 1, 0], [1, 0, 0], 0.17, 0.13, 0.15));
+  const bot = bellyFairingPoint(34, 1, 1);
+  parts.push(lensDome([bot[0], bot[1] + 0.01, 0], [0, -1, 0], [1, 0, 0], 0.17, 0.13, 0.15));
+  return merge(parts);
+}
+
 export function buildAirframe(quality: number): Group {
   const root = group('airframe', [], 'fuselage');
-  root.add(mesh('fuselage_skin', buildFuselageSkin({ rows: Math.round(240 * quality), around: Math.round(112 * quality) }), 'paint', 'fuselage'));
+  root.add(mesh('fuselage_skin', buildFuselageSkin({ rows: Math.round(240 * quality), around: Math.round(112 * quality) }), 'livery', 'fuselage'));
   root.add(mesh('belly_fairing_R', buildBellyFairing(1, Math.round(60 * quality), Math.round(28 * quality)), 'paintBelly', 'bellyFairing'));
   root.add(mesh('belly_fairing_L', buildBellyFairing(-1, Math.round(60 * quality), Math.round(28 * quality)), 'paintBelly', 'bellyFairing'));
 
@@ -288,7 +359,21 @@ export function buildAirframe(quality: number): Group {
   root.add(doors);
 
   root.add(mesh('apu_exhaust', apuExhaust(), 'exhaust', 'apu'));
-  const antennas = merge([blade(14.5, true), blade(27.0, true, 0.32, 0.45), blade(46.5, true, 0.36), blade(11.0, false), blade(33.0, false, 0.3, 0.45)]);
+  // APU air intake on the right side of the tail cone: recess and a hinged scoop door
+  {
+    const s = 66.4;
+    const y = 8.45;
+    root.add(mesh('apu_intake', conformalShape(1, s, y, roundedRect(0.66, 0.4, 0.06, 3), 0.003, 2), 'seal', 'apu'));
+    const hingePt = surfaceAt(1, s + 0.32, y, 0.014);
+    root.add(pivoted('apu_intake_door', hingePt, [mesh('apu_intake_door_skin', conformalShape(1, s, y, roundedRect(0.62, 0.36, 0.05, 3), 0.014, 3, true), 'livery', 'apu')], { kind: 'hinge', axis: [0, -1, 0], min: 0, max: 35 }, 'apu'));
+  }
+  const ov = outflowValves();
+  root.add(mesh('outflow_valves', ov.recess, 'seal', 'fuselage'));
+  root.add(mesh('outflow_louvres', ov.louvres, 'darkMetal', 'fuselage'));
+  root.add(mesh('windshield_wipers', wipers(), 'darkMetal', 'cockpitWindows'));
+  root.add(mesh('light_lenses', lightLenses(), 'lens', 'fuselage'));
+  // drain masts under the keel join the antennas
+  const antennas = merge([blade(14.5, true), blade(27.0, true, 0.32, 0.45), blade(46.5, true, 0.36), blade(11.0, false), blade(33.0, false, 0.3, 0.45), blade(14.2, false, 0.2, 0.28), blade(56.2, false, 0.2, 0.28)]);
   root.add(mesh('antennas', merge([antennas, satcomRadome(quality)]), 'composite', 'antennas'));
   root.add(mesh('air_data_probes', airDataProbes(), 'metal', 'antennas'));
   root.add(mesh('pack_inlets', packInlets(), 'seal', 'bellyFairing'));

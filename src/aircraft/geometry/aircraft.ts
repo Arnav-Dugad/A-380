@@ -4,7 +4,7 @@
  */
 import type { Group } from 'three';
 import { buildAirframe } from './airframe';
-import { buildEngine, buildPylon, engineFrames } from './engine';
+import { buildAftPylonFairing, buildEngine, buildPylon, engineFrames } from './engine';
 import { buildGear } from './gear';
 import { group, mesh } from './parts';
 import { buildHtp, buildVtp } from './tail';
@@ -25,6 +25,7 @@ export function buildAsset(name: AssetName, quality: number): Group {
       for (const f of engineFrames()) {
         g.add(buildEngine(f, quality));
         g.add(mesh(`pylon_${f.id}`, buildPylon(f, quality), 'paint', 'pylon'));
+        g.add(mesh(`pylon_aft_${f.id}`, buildAftPylonFairing(f, quality), 'exhaust', 'pylon'));
       }
       return g;
     }

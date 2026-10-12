@@ -54,7 +54,7 @@ export interface UIState {
   select: (id: string | null, node?: string | null) => void;
 }
 
-const safeStorage = createJSONStorage(() => {
+export const safeStorage = createJSONStorage(() => {
   try {
     const k = '__a380_probe__';
     localStorage.setItem(k, '1');

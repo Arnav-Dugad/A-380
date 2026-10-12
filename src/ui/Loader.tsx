@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { onRig } from '../aircraft/rig';
 import { flyTo, goPreset } from '../camera/controls';
 import { useUI } from '../state/ui';
+import { applyShared, parseShared } from '../tools/share';
 import { Button, Label, cx } from './kit';
 
 /** Loading screen and cinematic introduction. */
@@ -17,10 +18,18 @@ export function Loader() {
 
   useEffect(() => {
     if (!ready || introDone) return;
+    // A share link skips the reveal and restores the shared view
+    const shared = parseShared();
+    if (shared) {
+      start();
+      void applyShared(shared);
+      return;
+    }
     // Cinematic reveal: start low off the nose, glide to the hero three-quarter view.
     void flyTo([118, 3.2, 26], [10, 7, 0], false, true).then(() => {
       window.setTimeout(() => void goPreset('home', true), 250);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, introDone]);
 
   const start = () => {

@@ -3,6 +3,9 @@ import { focusObjects, goPreset } from '../camera/controls';
 import { clearSelection } from '../aircraft/interaction';
 import { unitByNode } from '../aircraft/selection';
 import { systems } from '../sim/systems';
+import { useRender } from '../render/renderState';
+import { useTools } from '../tools/toolsState';
+import { numpadView } from '../camera/numpad';
 import { useUI } from '../state/ui';
 import { SECTIONS } from './TopBar';
 
@@ -12,6 +15,12 @@ export function useShortcuts(toggleHelp: () => void): void {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // Blender numpad views (the digit row keeps switching sections)
+      const sec0 = useUI.getState().section;
+      if (e.code.startsWith('Numpad') && sec0 !== 'flight' && sec0 !== 'cockpit' && sec0 !== 'cabin') {
+        if (numpadView(e.code, e.ctrlKey || e.metaKey)) e.preventDefault();
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const ui = useUI.getState();
       if (ui.section === 'flight' && !['Escape', '?', 'p', 'P'].includes(e.key) && !/^[1-7]$/.test(e.key)) return;
@@ -19,10 +28,24 @@ export function useShortcuts(toggleHelp: () => void): void {
       const sec = SECTIONS.find((s) => s.key === e.key);
       if (sec) return ui.set({ section: sec.id });
       switch (e.key) {
-        case 'Escape':
+        case 'Escape': {
+          const t = useTools.getState();
+          if (t.pick !== 'none') {
+            t.set({ pick: 'none' });
+            break;
+          }
+          if (t.story >= 0) {
+            t.set({ story: -1, storyPlaying: false });
+            break;
+          }
           if (ui.photoMode) ui.set({ photoMode: false });
           else if (ui.cinematic) ui.set({ cinematic: null });
           else clearSelection();
+          break;
+        }
+        case 'm':
+        case 'M':
+          useTools.getState().togglePanel('measure');
           break;
         case 'h':
         case 'H':
@@ -70,6 +93,18 @@ export function useShortcuts(toggleHelp: () => void): void {
         case '?':
           toggleHelp();
           break;
+        case 'z':
+        case 'Z': {
+          // Blender: Z cycles solid / material / rendered, Shift+Z toggles wireframe
+          const r = useRender.getState();
+          if (e.shiftKey) r.set({ shading: r.shading === 'wireframe' ? 'solid' : 'wireframe' });
+          else {
+            const cycle = ['solid', 'material', 'rendered'] as const;
+            const i = cycle.indexOf(r.shading as (typeof cycle)[number]);
+            r.set({ shading: cycle[(i + 1) % cycle.length] });
+          }
+          break;
+        }
       }
     };
     window.addEventListener('keydown', onKey);

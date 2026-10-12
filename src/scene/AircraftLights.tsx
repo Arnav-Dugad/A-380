@@ -5,7 +5,8 @@
  */
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
-import { Color, MeshBasicMaterial, Object3D, type PointLight, type SpotLight } from 'three';
+import { AdditiveBlending, BufferAttribute, Color, ConeGeometry, Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3, type PointLight, type SpotLight } from 'three';
+import { flexAt } from '../effects/deform';
 import { systems } from '../sim/systems';
 import { useUI } from '../state/ui';
 import { WING, sx } from '../aircraft/geometry/layout';
@@ -27,6 +28,28 @@ const P = {
   wingL: [sx(24), 6.9, -3.6],
   wingR: [sx(24), 6.9, 3.6],
 } as const;
+
+/** Additive light beam: a long open cone whose brightness fades from the lamp outward. */
+function beam(from: readonly number[], to: [number, number, number], length: number, radius: number): Mesh {
+  const g = new ConeGeometry(radius, length, 28, 12, true);
+  g.translate(0, -length / 2, 0); // apex at the origin, opening along −Y
+  const p = g.getAttribute('position');
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const d = -p.getY(i) / length; // 0 at the lamp, 1 at the far end
+    const k = Math.pow(1 - d, 2.2) * Math.min(1, d * 12);
+    col.set([k, k * 0.97, k * 0.9], i * 3);
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3));
+  const m = new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, opacity: 0, toneMapped: false, side: 2 });
+  const mesh = new Mesh(g, m);
+  mesh.position.set(from[0]!, from[1]!, from[2]!);
+  const dir = new Vector3(to[0] - from[0]!, to[1] - from[1]!, to[2] - from[2]!).normalize();
+  mesh.quaternion.copy(new Quaternion().setFromUnitVectors(new Vector3(0, -1, 0), dir));
+  mesh.userData.noPathTrace = true;
+  mesh.renderOrder = 5;
+  return mesh;
+}
 
 function Bulb({ pos, color, name }: { pos: readonly number[]; color: string; name: string }) {
   return (
@@ -61,6 +84,14 @@ export function AircraftLights() {
     mk('wingR', [sx(40), 4.5, 22]);
     return t;
   }, []);
+  const beams = useMemo(
+    () => ({
+      landL: beam(P.landL, [P.landL[0] + 60, -4, -12], 75, 7.5),
+      landR: beam(P.landR, [P.landR[0] + 60, -4, 12], 75, 7.5),
+      taxi: beam(P.taxi, [P.taxi[0] + 40, -2, 0], 42, 9),
+    }),
+    [],
+  );
 
   useFrame((st) => {
     const s = systems.state;
@@ -69,6 +100,24 @@ export function AircraftLights() {
     if (!g) return;
     const t = st.clock.elapsedTime;
     const strobe = s.lights.strobe && pw && (t % 1.2 < 0.06 || (t % 1.2 > 0.14 && t % 1.2 < 0.2));
+    // wing-tip lights ride the bending wing
+    for (const [name, base, z] of [
+      ['navL', P.navL[1], P.navL[2]],
+      ['navR', P.navR[1], P.navR[2]],
+      ['strobeL', P.navL[1], P.navL[2]],
+      ['strobeR', P.navR[1], P.navR[2]],
+    ] as const) {
+      const o = g.getObjectByName(name);
+      if (o) o.position.y = base + flexAt(z);
+    }
+    if (points.current.navL) points.current.navL.position.y = P.navL[1] + flexAt(P.navL[2]);
+    if (points.current.navR) points.current.navR.position.y = P.navR[1] + flexAt(P.navR[2]);
+    // visible beams in the dark (haze makes them read even on a clear night)
+    const beamK = dark ? (env === 'night' ? 0.55 : 0.32) : 0;
+    (beams.landL.material as MeshBasicMaterial).opacity = s.lights.landing && pw ? beamK : 0;
+    (beams.landR.material as MeshBasicMaterial).opacity = s.lights.landing && pw ? beamK : 0;
+    (beams.taxi.material as MeshBasicMaterial).opacity = s.lights.taxi && pw && s.gear.position < 0.1 ? beamK * 0.8 : 0;
+    for (const b of Object.values(beams)) b.visible = (b.material as MeshBasicMaterial).opacity > 0.001;
     const beacon = s.lights.beacon && pw && t % 1.0 < 0.12;
     const set = (name: string, on: boolean, col: string) => {
       const m = g.getObjectByName(name) as unknown as { material: MeshBasicMaterial } | undefined;
@@ -126,6 +175,9 @@ export function AircraftLights() {
       {Object.values(targets).map((o, i) => (
         <primitive key={i} object={o} />
       ))}
+      <primitive object={beams.landL} />
+      <primitive object={beams.landR} />
+      <primitive object={beams.taxi} />
       <Bulb pos={P.navL} color="#222" name="navL" />
       <Bulb pos={P.navR} color="#222" name="navR" />
       <Bulb pos={P.tail} color="#222" name="tail" />

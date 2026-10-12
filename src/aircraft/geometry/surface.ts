@@ -131,7 +131,7 @@ export function capLoop(loop: Vec3[], normal: Vec3): BufferGeometry {
  * Surface of revolution around the local +X axis (engine/wheel convention).
  * profile: [x, r] pairs; returns ring surface with outward normals.
  */
-export function lathe(profile: readonly (readonly [number, number])[], segments: number, inward = false): BufferGeometry {
+export function lathe(profile: readonly (readonly [number, number])[], segments: number, inward = false, uv?: (x: number, r: number, a: number) => [number, number]): BufferGeometry {
   const nu = profile.length - 1;
   return gridSurface(
     nu,
@@ -141,7 +141,7 @@ export function lathe(profile: readonly (readonly [number, number])[], segments:
       const a = (j / segments) * Math.PI * 2;
       return [x, r * Math.cos(a), r * Math.sin(a)];
     },
-    { wrapV: true, flip: !inward },
+    { wrapV: true, flip: !inward, uv: uv ? (i, j) => uv(profile[i]![0], profile[i]![1], j / segments) : undefined },
   );
 }
 

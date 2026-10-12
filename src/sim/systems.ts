@@ -46,6 +46,8 @@ export interface DoorState {
   target: 0 | 1;
   position: number;
   armed: boolean;
+  /** evacuation slide inflation, 0 = packed … 1 = fully inflated */
+  slide: number;
 }
 
 export interface Annunciation {
@@ -105,8 +107,8 @@ function newEngine(): EngineState {
 
 export function createState(): SystemsState {
   const doors: Record<string, DoorState> = {};
-  for (const id of PASSENGER_DOORS) doors[id] = { id, kind: 'passenger', target: 0, position: 0, armed: false };
-  for (const id of CARGO_DOORS) doors[id] = { id, kind: 'cargo', target: 0, position: 0, armed: false };
+  for (const id of PASSENGER_DOORS) doors[id] = { id, kind: 'passenger', target: 0, position: 0, armed: false, slide: 0 };
+  for (const id of CARGO_DOORS) doors[id] = { id, kind: 'cargo', target: 0, position: 0, armed: false, slide: 0 };
   return {
     time: 0,
     elec: { battery: false, extAvail: true, extOn: false, apuGen: true, ac: false, dc: false, sources: [] },
@@ -304,6 +306,29 @@ export class AircraftSystems {
     d.armed = armed;
     return this.ok(`Door ${id} slide ${armed ? 'ARMED' : 'DISARMED'}`);
   }
+  /**
+   * Emergency evacuation demonstration: armed doors open under power assist and their slides
+   * inflate (about six seconds). Disarmed doors stay shut.
+   */
+  evacuate(): CommandResult {
+    const s = this.state;
+    if (s.air.airborne || s.air.gs > 1) return this.deny('Evacuation only on the ground with the aircraft stopped');
+    let n = 0;
+    for (const d of Object.values(s.doors))
+      if (d.kind === 'passenger' && d.armed) {
+        d.target = 1;
+        d.slide = Math.max(d.slide, 0.0001);
+        n++;
+      }
+    return n ? this.ok(`Evacuation: ${n} doors opening, slides inflating`) : this.deny('No doors are armed — arm the slides first');
+  }
+  /** Pack the slides away again (resets the evacuation demonstration). */
+  restowSlides(): void {
+    for (const d of Object.values(this.state.doors)) {
+      d.slide = 0;
+      if (d.kind === 'passenger') d.target = 0;
+    }
+  }
   setAllDoors(open: boolean, kind: 'passenger' | 'cargo' | 'all' = 'all'): void {
     for (const d of Object.values(this.state.doors)) if (kind === 'all' || d.kind === kind) this.setDoor(d.id, open);
   }
@@ -426,8 +451,10 @@ export class AircraftSystems {
 
     // Doors
     for (const d of Object.values(s.doors)) {
-      const speed = d.kind === 'cargo' ? 1 / 14 : 1 / 7;
+      // an armed door opens under its emergency power assist in about two seconds
+      const speed = d.kind === 'cargo' ? 1 / 14 : d.slide > 0 ? 1 / 2 : 1 / 7;
       d.position = rate(d.position, d.target, speed, dt);
+      if (d.slide > 0 && d.position > 0.5) d.slide = rate(d.slide, 1, 1 / 6, dt);
     }
 
     s.annunciations = this.annunciations();

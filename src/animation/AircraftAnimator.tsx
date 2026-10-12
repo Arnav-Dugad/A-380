@@ -7,6 +7,41 @@ import { getRig, type AircraftRig } from '../aircraft/rig';
 import { advance } from '../sim/loop';
 import { systems } from '../sim/systems';
 import { publishSnapshot } from '../state/sim';
+import { deform } from '../effects/deform';
+import { flight } from '../sim/flight';
+import { useUI } from '../state/ui';
+import { worldFrame } from '../scene/worldFrame';
+import { Quaternion } from 'three';
+
+const tmpQ = new Quaternion();
+let flexState = -0.28;
+let gustPhase = 0;
+
+/**
+ * Wing bending: tanks full on the ground droop the tips about 0.3 m; in flight lift bends them
+ * up, roughly in proportion to load factor, with a light ripple in turbulence.
+ */
+function updateDeform(dt: number): void {
+  const a = worldFrame.aircraft;
+  if (a) {
+    a.updateWorldMatrix(true, false);
+    deform.uAircraftInv.value.copy(a.matrixWorld).invert();
+    deform.uAircraftUp.value.set(0, 1, 0).applyQuaternion(a.getWorldQuaternion(tmpQ));
+  }
+  const s = systems.state;
+  const inFlight = useUI.getState().section === 'flight';
+  const airborne = inFlight ? !flight.state.onGround : s.air.airborne;
+  const nz = inFlight ? flight.state.nz : 1;
+  // lift builds with airspeed even before rotation
+  const q = Math.min(1, Math.max(0, (s.air.ias - 60) / 90));
+  const target = airborne ? 0.2 + 2.35 * Math.max(0, nz) : -0.28 + q * 1.4;
+  flexState += (target - flexState) * (1 - Math.exp(-dt / 0.9));
+  gustPhase += dt;
+  const turb = inFlight && airborne ? flight.weather.turbulence : 0;
+  deform.uFlex.value = flexState + turb * 0.35 * (Math.sin(gustPhase * 2.3) * 0.6 + Math.sin(gustPhase * 5.1 + 1.3) * 0.4);
+  // tyres squash onto the pavement only while the gear carries weight
+  deform.uGround.value = s.gear.wow ? 0.045 : -10;
+}
 
 const SIDES = ['R', 'L'] as const;
 /** Visual fan speed is reduced to avoid stroboscopic aliasing at display refresh rates. */
@@ -97,6 +132,7 @@ export function AircraftAnimator() {
     advance(delta);
     const rig = getRig();
     if (rig) applyState(rig, Math.min(delta, 0.1));
+    updateDeform(Math.min(delta, 0.1));
     publishSnapshot(performance.now());
   }, -1);
   return null;

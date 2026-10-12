@@ -14,6 +14,12 @@ const KEYS: [string, string][] = [
   ['L', 'Exterior lights'],
   ['C', 'Cinematic tour'],
   ['P', 'Photo mode'],
+  ['Z', 'Shading: solid / material / rendered'],
+  ['⇧ Z', 'Wireframe'],
+  ['Num 1 3 7', 'Front / right / top (Ctrl: opposite)'],
+  ['Num 2 4 6 8', 'Orbit 15°'],
+  ['Num 5', 'Orthographic view'],
+  ['M', 'Measure'],
   ['?', 'This help'],
 ];
 
@@ -67,7 +73,7 @@ export function HelpPanel({ onClose, wide = false }: { onClose: () => void; wide
         </ul>
       </Group>
       <Group label="Keyboard shortcuts">
-        <dl className="grid grid-cols-[72px_1fr] gap-y-1.5 text-[12px]">
+        <dl className="grid grid-cols-[84px_1fr] gap-y-1.5 text-[12px]">
           {KEYS.map(([k, d]) => (
             <div key={k} className="contents">
               <dt>

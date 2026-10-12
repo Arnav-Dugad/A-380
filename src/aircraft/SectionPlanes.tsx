@@ -15,7 +15,7 @@ const FAR = 1e5;
 export const longitudinal = new Plane(new Vector3(-1, 0, 0), FAR);
 export const horizontal = new Plane(new Vector3(0, -1, 0), FAR);
 const PLANES = [longitudinal, horizontal];
-const SKIN_KEYS = ['livery', 'paint', 'paintBelly', 'paintTail', 'composite', 'leadingEdge'];
+const SKIN_KEYS = ['livery', 'wingSkin', 'tailSkin', 'nacelle', 'paint', 'paintBelly', 'paintTail', 'composite', 'leadingEdge'];
 
 function attach(m: Material | Material[]) {
   for (const mm of Array.isArray(m) ? m : [m]) if (mm.clippingPlanes !== PLANES) mm.clippingPlanes = PLANES;

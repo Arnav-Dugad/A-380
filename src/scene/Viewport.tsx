@@ -1,6 +1,8 @@
 import { CameraControls, ContactShadows, PerformanceMonitor } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
+import { setAtlasQuality } from '../aircraft/materials';
+import { useRender } from '../render/renderState';
 import { NeutralToneMapping, type Group } from 'three';
 import { StructureLayer } from '../aircraft/AircraftLayers';
 import { AircraftModel } from '../aircraft/AircraftModel';
@@ -22,6 +24,11 @@ import { Cinematic } from '../camera/Cinematic';
 import { PhotoBridge } from '../ui/PhotoMode';
 import { worldFrame } from './worldFrame';
 import { ViewInsetRig } from '../camera/ViewInsetRig';
+import { PathTracer, ShadingModes } from '../render/Shading';
+import { ToolsLayer } from '../tools/ToolsLayer';
+import { Slides } from '../effects/Slides';
+import { PushbackTug, resetPushback } from './airport/GroundOps';
+import { FlightFX } from '../effects/FlightFX';
 
 const DPR: Record<string, [number, number]> = { ultra: [1, 2], high: [1, 1.75], balanced: [0.85, 1.25], performance: [0.6, 1] };
 
@@ -32,6 +39,18 @@ export function Viewport() {
   const section = useUI((s) => s.section);
   const aircraft = useRef<Group>(null);
   const dpr = DPR[quality]!;
+  // a pushback only makes sense on the apron; any change of scene puts the aircraft back on stand
+  useEffect(() => resetPushback(), [env, section]);
+  // full-resolution skin atlases are painted in a worker once the first frames are up
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void setAtlasQuality(quality, () => {
+        const r = useRender.getState();
+        if (r.shading === 'rendered') r.resync();
+      });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [quality]);
   return (
     <Canvas
       shadows={quality !== 'performance'}
@@ -56,6 +75,8 @@ export function Viewport() {
         <CockpitScene />
         <CabinScene />
         <AircraftLights />
+        <Slides />
+        <PushbackTug visible={env === 'apron' && section !== 'flight'} />
       </group>
       <AircraftAnimator />
       <Exploder />
@@ -69,7 +90,11 @@ export function Viewport() {
       <Cinematic />
       <ViewInsetRig />
       <PhotoBridge />
+      <ShadingModes />
       <Effects />
+      <PathTracer />
+      <FlightFX />
+      <ToolsLayer />
       <PerfProbe />
     </Canvas>
   );

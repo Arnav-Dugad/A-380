@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { BoxGeometry, CanvasTexture, Color, InstancedMesh, LinearSRGBColorSpace, Matrix4, MeshStandardMaterial, PlaneGeometry, RepeatWrapping, SRGBColorSpace, Quaternion, Vector3, type BufferGeometry, type Texture } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildGse } from './gse';
+import { BeltBags, JetBridges, useFleetVisible } from './GroundOps';
 import { APRON, RWY, STAND, TERMINAL, TOWER, TWY_CONNECTORS, TWY_Z } from './layout';
 
 function noiseTex(base: [number, number, number], amp: number, size = 512, streaks = false): Texture {
@@ -152,37 +153,6 @@ function tower(): BufferGeometry {
   return mergeGeometries([box(TOWER.x, 0, TOWER.z, 9, 52, 9), box(TOWER.x, 52, TOWER.z, 16, 7, 16), box(TOWER.x, 59, TOWER.z, 13, 1.2, 13), box(TOWER.x, 60.2, TOWER.z, 1, 8, 1)].map((g) => g.toNonIndexed()));
 }
 
-/** Three boarding bridges: two to main-deck doors M1L/M2L, one to upper-deck U1L. */
-function jetBridges(): BufferGeometry {
-  const parts: BufferGeometry[] = [];
-  const termFace = TERMINAL.z + 2;
-  // Door positions in world (aircraft nose-in, heading north: model +X → world −Z, model +Z (right) → world +X)
-  const door = (s: number) => STAND.z - (36.0 - s); // world z of a fuselage station
-  const leftX = STAND.x - 3.9; // left side of fuselage (west)
-  const bridges = [
-    { s: 9.6, y: 5.2, rot: { x: STAND.x - 20, z: termFace + 10 } },
-    { s: 20.15, y: 5.2, rot: { x: STAND.x - 30, z: termFace + 16 } },
-    { s: 16.3, y: 7.95, rot: { x: STAND.x - 14, z: termFace + 6 } },
-  ];
-  for (const b of bridges) {
-    const end = new Vector3(leftX - 2.5, b.y, door(b.s));
-    const start = new Vector3(b.rot.x, b.y, b.rot.z);
-    const len = start.distanceTo(end);
-    const g = new BoxGeometry(len, 3.2, 3.2);
-    const mid = start.clone().add(end).multiplyScalar(0.5);
-    const ang = Math.atan2(end.z - start.z, end.x - start.x);
-    g.rotateY(-ang);
-    g.translate(mid.x, mid.y + 1.4, mid.z);
-    parts.push(g.toNonIndexed());
-    parts.push(box(start.x, 0, start.z, 3.6, b.y + 3, 3.6).toNonIndexed()); // rotunda
-    parts.push(box(end.x + 1.2, b.y, end.z, 3.0, 3.4, 3.8).toNonIndexed()); // cab
-    parts.push(box(mid.x, 0, mid.z, 0.6, b.y, 0.6).toNonIndexed()); // drive column
-  }
-  // fixed link from terminal
-  parts.push(box(STAND.x - 22, 5.2, termFace + 3, 26, 3.4, 4).toNonIndexed());
-  return mergeGeometries(parts);
-}
-
 /** Instanced airfield lights: runway edge (white), centreline, thresholds (green/red), taxiway edges (blue). */
 function lightInstances(): { pos: Vector3; color: Color }[] {
   const out: { pos: Vector3; color: Color }[] = [];
@@ -230,10 +200,11 @@ export function Airport({ night }: { night: boolean }) {
     lm.frustumCulled = false;
     const num09 = textTexture('09');
     const num27 = textTexture('27');
-    return { asphalt, concrete, tw, term, g, lm, lightMat, num09, num27, markings: runwayMarkings(), stand: standMarkings(), tower: tower(), bridges: jetBridges() };
+    return { asphalt, concrete, tw, term, g, lm, lightMat, num09, num27, markings: runwayMarkings(), stand: standMarkings(), tower: tower() };
   }, []);
 
   data.lightMat.emissiveIntensity = night ? 4 : 0.6;
+  const fleetVisible = useFleetVisible();
   return (
     <group name="airport">
       {/* Runway */}
@@ -280,10 +251,10 @@ export function Airport({ night }: { night: boolean }) {
       <mesh geometry={data.tower} castShadow>
         <meshStandardMaterial color="#cfd3d6" roughness={0.6} />
       </mesh>
-      <mesh geometry={data.bridges} castShadow receiveShadow>
-        <meshStandardMaterial color="#b9c0c6" roughness={0.45} metalness={0.5} />
-      </mesh>
-      {/* Ground support equipment, one draw call per material */}
+      <JetBridges />
+      <BeltBags />
+      {/* Ground support equipment, one draw call per material (driven away for a pushback) */}
+      <group visible={fleetVisible}>
       <mesh geometry={data.g.body} castShadow receiveShadow>
         <meshPhysicalMaterial color="#eef0f2" roughness={0.32} clearcoat={0.6} clearcoatRoughness={0.2} />
       </mesh>
@@ -302,6 +273,7 @@ export function Airport({ night }: { night: boolean }) {
       <mesh geometry={data.g.alu} castShadow receiveShadow>
         <meshStandardMaterial color="#c5c9ce" roughness={0.35} metalness={1} />
       </mesh>
+      </group>
       <primitive object={data.lm} />
     </group>
   );

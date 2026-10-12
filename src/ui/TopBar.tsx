@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useUI, type EnvPreset, type Section } from '../state/ui';
 import { Icon, type IconName } from './icons';
 import { IconButton, Panel, cx } from './kit';
+import { ShadingSwitch } from './RenderPanel';
+import { ToolsMenu } from './ToolPanels';
 
 export const SECTIONS: { id: Section; label: string; icon: IconName; key: string }[] = [
   { id: 'explore', label: 'Explore', icon: 'explore', key: '1' },
@@ -111,7 +113,10 @@ export function TopBar({ onSettings, onHelp, compact = false }: { onSettings: ()
         </Panel>
       )}
       <Panel className="flex items-center gap-0.5 px-1 py-1">
+        <ShadingSwitch compact={compact} />
+        {!compact && <span className="mx-1 h-5 w-px bg-white/[0.08]" aria-hidden="true" />}
         <EnvMenu />
+        <ToolsMenu />
         <IconButton icon="camera" label="Photo mode (P)" onClick={() => set({ photoMode: true })} />
         <IconButton icon="settings" label="Graphics & settings" onClick={onSettings} />
         <IconButton icon="help" label="Help & shortcuts (?)" onClick={onHelp} />

@@ -1,4 +1,4 @@
-import { Vector3, type Group } from 'three';
+import { Matrix4, Vector3, type Group } from 'three';
 
 /**
  * Shared render-frame bookkeeping. In explore modes the aircraft sits at the render origin
@@ -12,4 +12,6 @@ export const worldFrame = {
   origin: new Vector3(),
   /** aircraft CG in render coordinates (shadow camera centre, chase camera target) */
   aircraftRenderPos: new Vector3(0, 5, 0),
+  /** aircraft pose relative to its stand during a pushback (identity when parked) */
+  push: new Matrix4(),
 };

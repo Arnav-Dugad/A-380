@@ -23,6 +23,9 @@ export function ViewInsetRig() {
     const k = 1 - Math.exp(-Math.min(dt, 0.1) * 7);
     cur.x += (tx - cur.x) * k;
     cur.y += (ty - cur.y) * k;
+    // settle exactly, so a still camera is bit-for-bit still (the path tracer accumulates on it)
+    if (Math.abs(tx - cur.x) < 0.05) cur.x = tx;
+    if (Math.abs(ty - cur.y) < 0.05) cur.y = ty;
     const { width: w, height: h } = st.size;
     if (Math.abs(cur.x) < 0.25 && Math.abs(cur.y) < 0.25 && tx === 0 && ty === 0) {
       if (cam.view?.enabled) cam.clearViewOffset();

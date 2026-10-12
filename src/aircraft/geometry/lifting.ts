@@ -44,6 +44,8 @@ export interface PanelOptions {
   nChord?: number;
   /** extra uniform thickness scale (e.g. a spoiler slab) */
   inset?: number;
+  /** texture coordinates from (span, chord fraction, upper surface) — a shared atlas per surface */
+  uvMap?: (span: number, xc: number, upper: boolean) => [number, number];
 }
 
 /**
@@ -89,7 +91,15 @@ export function panel(
     nSpan,
     nv,
     (i, j) => pt(span0 + ((span1 - span0) * i) / nSpan, j),
-    { wrapV: true, uv: (i, j) => [i / nSpan, j / nv] },
+    {
+      wrapV: true,
+      uv: opts.uvMap
+        ? (i, j) => {
+            const q = loop[j % nv]!;
+            return opts.uvMap!(span0 + ((span1 - span0) * i) / nSpan, q.x, q.upper);
+          }
+        : (i, j) => [i / nSpan, j / nv],
+    },
   );
   const capA: Vec3[] = [];
   const capB: Vec3[] = [];
@@ -121,6 +131,7 @@ export function skinSlab(
   upper: boolean,
   thicknessM: number,
   lift = 0.004,
+  uvMap?: (span: number, xc: number, upper: boolean) => [number, number],
 ): BufferGeometry {
   const nSpan = Math.max(2, Math.ceil(Math.abs(span1 - span0) / 0.8));
   const nC = 6;
@@ -136,7 +147,10 @@ export function skinSlab(
     const c = surf.chord(span);
     return surf.map(span, q.x, ordinate(surf, span, q.x, upper) + (sgn * q.off) / c);
   };
-  const body = gridSurface(nSpan, nv - 1, (i, j) => pt(span0 + ((span1 - span0) * i) / nSpan, j), { wrapV: true });
+  const body = gridSurface(nSpan, nv - 1, (i, j) => pt(span0 + ((span1 - span0) * i) / nSpan, j), {
+    wrapV: true,
+    uv: uvMap ? (i, j) => uvMap(span0 + ((span1 - span0) * i) / nSpan, loop[j % (nv - 1)]!.x, upper) : undefined,
+  });
   const capA: Vec3[] = [];
   const capB: Vec3[] = [];
   for (let k = 0; k < nv - 1; k++) {

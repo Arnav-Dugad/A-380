@@ -10,6 +10,8 @@ import { firstPerson } from '../camera/FirstPerson';
 import { Box3, Vector3 } from 'three';
 import { flight } from '../sim/flight';
 import { perf } from '../perf/PerfProbe';
+import { useRender } from '../render/renderState';
+import { previewAtlas } from '../aircraft/textures/atlases';
 
 export interface Bridge {
   ready: () => boolean;
@@ -22,6 +24,8 @@ export interface Bridge {
   node: (name: string) => { pos: number[]; quat: number[] } | null;
   flight: typeof flight;
   perf: typeof perf;
+  render: typeof useRender;
+  atlas: typeof previewAtlas;
   extra: Record<string, unknown>;
 }
 
@@ -47,6 +51,8 @@ export function installBridge(): void {
       return { nodes: r.nodes.size, articulated: r.articulated.size, meshes: r.meshes.length, parts: [...r.partMeshes.keys()] };
     },
     systems,
+    render: useRender,
+    atlas: previewAtlas,
     project: (name) => {
       const n = getRig()?.nodes.get(name);
       const c = getControls();

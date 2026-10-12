@@ -8,7 +8,8 @@ import type { BufferGeometry, Group } from 'three';
 import { ENGINES, NACELLE, sx } from './layout';
 import { lerp, type Vec3 } from './math';
 import { group, mesh, pivoted } from './parts';
-import { gridSurface, lathe, merge, orientOutward } from './surface';
+import { flipGeometry, gridSurface, lathe, merge, orientOutward } from './surface';
+import { box } from './gear';
 import { thickness } from './lifting';
 import { wingLE, wingChord, wingLowerPoint } from './wing';
 
@@ -51,8 +52,24 @@ export function engineFrames(): EngineFrame[] {
 }
 
 /** Lathe a closed (x, r) loop; outward normals follow from the loop orientation. */
-function latheLoop(profile: Prof, seg: number): BufferGeometry {
-  return orientOutward(lathe(profile, seg));
+function latheLoop(profile: Prof, seg: number, atlas = false): BufferGeometry {
+  return orientOutward(lathe(profile, seg, false, atlas ? nacelleUV : undefined));
+}
+
+/**
+ * Nacelle atlas: u runs aft from the inlet lip (x = 0) to the nozzle (x = −6.7); v runs
+ * around from the crown (0) through the outboard-facing +Z side (0.25) to the keel (0.5).
+ */
+export const nacelleUV = (x: number, _r: number, a: number): [number, number] => [Math.min(1, Math.max(0, -x / 6.7)), a];
+
+/** Open surface of revolution facing away from the axis ('out') or towards it ('in'). */
+function latheOpen(profile: Prof, seg: number, facing: 'out' | 'in', uv?: (x: number, r: number, a: number) => [number, number]): BufferGeometry {
+  const g = lathe(profile, seg, false, uv);
+  const p = g.getAttribute('position');
+  const n = g.getAttribute('normal');
+  const i = Math.floor(p.count / 2);
+  const radial = (n.getY(i) * p.getY(i) + n.getZ(i) * p.getZ(i)) / (Math.hypot(p.getY(i), p.getZ(i)) || 1);
+  return (radial > 0) === (facing === 'out') ? g : flipGeometry(g);
 }
 
 function fanBlades(count: number, quality: number): BufferGeometry {
@@ -103,18 +120,29 @@ export function buildEngine(frame: EngineFrame, quality: number): Group {
   // Inlet lip (polished) and fan cowl (painted) form one closed loop split by material.
   const lip: Prof = [...LIP, [-0.62, 1.49]];
   root.add(mesh(`${id}_inlet`, latheLoop(lip, seg), 'inletLip', 'engineInlet'));
-  const cowl: Prof = [
+  // painted fan cowl outside; perforated acoustic liner lining the inlet duct inside
+  const cowlOuter: Prof = [
     [SLEEVE_X, 1.875],
     [-3.2, 1.86],
     [-2.2, 1.858],
     [-1.3, 1.835],
     [-0.62, 1.79],
+  ];
+  const liner: Prof = [
+    [-0.45, 1.495],
     [-0.62, 1.495],
     [-1.2, 1.482],
     [-2.6, 1.5],
     [SLEEVE_X, 1.525],
   ];
-  root.add(mesh(`${id}_fancowl`, latheLoop(cowl, seg), 'paint', 'fanCowl'));
+  root.add(mesh(`${id}_fancowl`, latheOpen(cowlOuter, seg, 'out', nacelleUV), 'nacelle', 'fanCowl'));
+  root.add(mesh(`${id}_liner`, latheOpen(liner, seg, 'in'), 'liner', 'engineInlet'));
+  // vortex-control strake on the inboard side of the cowl
+  {
+    const a = -frame.side * 0.85; // inboard upper quadrant
+    const r = 1.86 + 0.11;
+    root.add(mesh(`${id}_strake`, box([-1.6, r * Math.cos(a), r * Math.sin(a)], [0.95, 0.22, 0.014], 0, 0, a), 'paint', 'fanCowl'));
+  }
 
   // Thrust-reverser translating sleeve / fixed aft cowl
   const sleeve: Prof = [
@@ -126,16 +154,37 @@ export function buildEngine(frame: EngineFrame, quality: number): Group {
     [-5.6, 1.525],
     [-6.55, 1.455],
   ];
-  const sleeveMesh = mesh(`${id}_sleeve`, latheLoop(sleeve, seg), 'paint', frame.reverser ? 'thrustReverser' : 'fanCowl');
+  const sleeveMesh = mesh(`${id}_sleeve`, latheLoop(sleeve, seg, true), 'nacelle', frame.reverser ? 'thrustReverser' : 'fanCowl');
   if (frame.reverser) {
     root.add(pivoted(`${id}_reverser`, [0, 0, 0], [sleeveMesh], { kind: 'slide', travel: [-0.75, 0, 0] }, 'thrustReverser'));
-    const cascade: Prof = [
-      [SLEEVE_X - 0.8, 1.55],
-      [SLEEVE_X - 0.8, 1.79],
-      [SLEEVE_X + 0.02, 1.85],
-      [SLEEVE_X + 0.02, 1.55],
+    // cascades: rings of turning vanes between axial strongbacks, bared when the sleeve slides aft
+    const parts: BufferGeometry[] = [];
+    const inner: Prof = [
+      [SLEEVE_X - 0.8, 1.545],
+      [SLEEVE_X - 0.8, 1.56],
+      [SLEEVE_X + 0.02, 1.56],
+      [SLEEVE_X + 0.02, 1.545],
     ];
-    root.add(mesh(`${id}_cascade`, latheLoop(cascade, seg), 'darkMetal', 'thrustReverser'));
+    parts.push(latheLoop(inner, seg));
+    for (let k = 0; k <= 9; k++) {
+      const x = SLEEVE_X - 0.78 + k * 0.088;
+      parts.push(
+        latheLoop(
+          [
+            [x - 0.007, 1.56],
+            [x - 0.02, 1.79],
+            [x + 0.0, 1.79],
+            [x + 0.007, 1.56],
+          ],
+          seg,
+        ),
+      );
+    }
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      parts.push(box([SLEEVE_X - 0.38, 1.675 * Math.cos(a), 1.675 * Math.sin(a)], [0.82, 0.23, 0.02], 0, 0, a));
+    }
+    root.add(mesh(`${id}_cascade`, merge(parts), 'darkMetal', 'thrustReverser'));
   } else root.add(sleeveMesh);
 
   // Fan face backdrop (dark duct ring behind blades) and core
@@ -180,7 +229,7 @@ export function buildEngine(frame: EngineFrame, quality: number): Group {
     [FAN_X + 0.72, 0.02],
   ];
   const fan = pivoted(`${id}_fan`, [0, 0, 0], [
-    mesh(`${id}_spinner`, latheLoop(spinner, seg), 'metal', 'engineFan'),
+    mesh(`${id}_spinner`, orientOutward(lathe(spinner, seg, false, (x, _r, a) => [(x - (FAN_X - 0.42)) / 1.14, a])), 'spinner', 'engineFan'),
     mesh(`${id}_blades`, fanBlades(NACELLE.fanBlades, quality), 'fan', 'engineFan'),
   ], { kind: 'spin', axis: [1, 0, 0] }, 'engineFan');
   root.add(fan);
@@ -237,6 +286,36 @@ export function buildPylon(frame: EngineFrame, quality: number): BufferGeometry 
       const zz = w * Math.sign(ca) * Math.pow(Math.abs(ca), 0.5);
       const yy = (yt + yb) / 2 + ((yt - yb) / 2) * Math.sign(sa) * Math.pow(Math.abs(sa), 0.7);
       return [sx(s), yy, side * z + zz];
+    },
+    { wrapV: true },
+  );
+  return orientOutward(g);
+}
+
+/** Aft pylon fairing: the titanium heat-shield canoe under the wing behind the nacelle. */
+export function buildAftPylonFairing(frame: EngineFrame, quality: number): BufferGeometry {
+  const z = frame.z;
+  const side = frame.side;
+  const le = wingLE(z);
+  const c = wingChord(z);
+  const s0 = le + 0.42 * c;
+  const s1 = le + 0.86 * c;
+  const nu = Math.round(24 * quality);
+  const nv = Math.round(14 * quality);
+  const g = gridSurface(
+    nu,
+    nv,
+    (i, j) => {
+      const t = i / nu;
+      const s = lerp(s0, s1, t);
+      const top = wingLowerPoint(side, z, Math.min(0.98, (s - le) / c))[1] + 0.06;
+      const depth = 0.62 * Math.pow(Math.sin(Math.PI * Math.min(1, Math.pow(t, 0.55))), 0.8) * (1 - t * 0.55) + 0.03;
+      const w = 0.3 * Math.pow(Math.sin(Math.PI * Math.min(1, Math.pow(t, 0.5))), 0.6) + 0.015;
+      const a = (j / nv) * Math.PI * 2;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const yy = top - depth * 0.5 * (1 - Math.sign(sa) * Math.pow(Math.abs(sa), 0.8));
+      return [sx(s), yy, side * z + w * Math.sign(ca) * Math.pow(Math.abs(ca), 0.6)];
     },
     { wrapV: true },
   );

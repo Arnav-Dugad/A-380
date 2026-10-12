@@ -7,7 +7,8 @@
 import { BufferGeometry, CylinderGeometry, Matrix4, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MAIN_DECK_FLOOR } from '../../aircraft/geometry/layout';
+import { MAIN_DECK_FLOOR, sx } from '../../aircraft/geometry/layout';
+import { wingLowerPoint } from '../../aircraft/geometry/wing';
 import { STAND } from './layout';
 
 export type GseMaterial = 'body' | 'hivis' | 'chassis' | 'glass' | 'rubber' | 'alu';
@@ -70,6 +71,54 @@ function ld3(f: Fleet, x: number, y: number, z: number): void {
   f.box('alu', x - 0.2, y + 0.18, z, 1.13, 0.36, 2.01, 0.02);
   f.box('alu', x + 0.38, y + 0.32, z, 0.6, 0.28, 2.0, 0.02, 0.6);
   f.box('chassis', x, y + 0.02, z, 1.56, 0.04, 2.04, 0.01);
+}
+
+/** Orthonormal basis whose Y axis is `dir` (for orienting cylinders). */
+function basisFor(dir: Vector3): [Vector3, Vector3, Vector3] {
+  const y = dir.clone().normalize();
+  const x = Math.abs(y.y) < 0.9 ? new Vector3(0, 1, 0).cross(y).normalize() : new Vector3(1, 0, 0).cross(y).normalize();
+  const z = x.clone().cross(y).normalize();
+  return [x, y, z];
+}
+
+function merged(f: Fleet): Record<GseMaterial, BufferGeometry> {
+  const out = {} as Record<GseMaterial, BufferGeometry>;
+  for (const k of Object.keys(f.parts) as GseMaterial[]) out[k] = f.parts[k].length ? mergeGeometries(f.parts[k])! : new BufferGeometry();
+  return out;
+}
+
+/**
+ * Towbarless push-back tug, in the aircraft's own frame (it rides with the aircraft during a
+ * pushback): low and wide, under the nose, its rear cradle holding the nose wheels.
+ */
+export function buildTug(): Record<GseMaterial, BufferGeometry> {
+  const f = new Fleet();
+  f.vehicle(sx(2.3), 0, Math.PI); // cradle (+X local) faces aft, around the nose gear
+  f.box('hivis', 0, 0.85, 0, 6.2, 0.9, 3.1, 0.18);
+  f.box('chassis', 0, 0.42, 0, 6.4, 0.25, 3.2, 0.06);
+  f.box('chassis', 3.4, 0.35, 0.62, 1.0, 0.2, 0.25, 0.04); // cradle arms either side of the nose wheels
+  f.box('chassis', 3.4, 0.35, -0.62, 1.0, 0.2, 0.25, 0.04);
+  f.cab(-1.9, 1.0, 1.6, 1.0, 1.3, 1.25, 'hivis');
+  for (const wx of [1.9, -1.9]) for (const wz of [1.3, -1.3]) f.wheel(wx, wz, 0.55, 0.45);
+  return merged(f);
+}
+
+/** Belt-loader conveyor lines (world frame): ground end → cargo sill, for the bag animation. */
+export function beltPaths(): { from: Vector3; to: Vector3; s: number }[] {
+  const zs = (s: number) => STAND.z - (36.0 - s);
+  const skin = STAND.x + 3.75;
+  return [
+    [17.2, 2.75],
+    [50.5, 2.8],
+  ].map(([s, sill]) => {
+    const len = 8.2;
+    const rise = sill! - 0.95;
+    const pitch = Math.atan2(rise, len - 1.2);
+    const vx = skin + len / 2 + 0.2;
+    const y = (lx: number) => 0.95 + rise / 2 + lx * Math.sin(pitch) + 0.06;
+    // vehicle faces −X (towards the aircraft): local +X → world −X
+    return { s: s!, from: new Vector3(vx + len / 2 - 0.4, y(-len / 2 + 0.4), zs(s!)), to: new Vector3(vx - len / 2 + 0.3, y(len / 2 - 0.3), zs(s!)) };
+  });
 }
 
 export function buildGse(): Record<GseMaterial, BufferGeometry> {
@@ -147,13 +196,33 @@ export function buildGse(): Record<GseMaterial, BufferGeometry> {
   f.cab(4.6, 0, 2.0, 2.4, 1.0, 1.9);
   for (const wx of [4.4, -2.8, -4.2]) for (const wz of [1.05, -1.05]) f.wheel(wx, wz, 0.52, 0.34);
 
-  // Push-back tug, low and wide, ahead of the nose gear
-  f.vehicle(STAND.x, zs(-5.5), -Math.PI / 2); // coupling (+X) faces the nose gear
-  f.box('hivis', 0, 0.85, 0, 6.2, 0.9, 3.1, 0.18);
-  f.box('chassis', 0, 0.42, 0, 6.4, 0.25, 3.2, 0.06);
-  f.box('chassis', 3.25, 0.65, 0, 0.3, 0.4, 1.2, 0.05); // tow coupling
-  f.cab(-1.9, 1.0, 1.6, 1.0, 1.3, 1.25, 'hivis');
-  for (const wx of [1.9, -1.9]) for (const wz of [1.3, -1.3]) f.wheel(wx, wz, 0.55, 0.45);
+  // Fuel hose from the tanker's reel to the refuel coupling under the right wing, sagging
+  {
+    const [mx, my, mz] = wingLowerPoint(1, 17.5, 0.16);
+    const end = new Vector3(STAND.x + mz, my - 0.12, STAND.z - mx);
+    const start = new Vector3(STAND.x + 21 - 1.4, 1.25, zs(33) - 3.6);
+    f.vehicle(0, 0, 0);
+    const n = 24;
+    for (let i = 0; i < n; i++) {
+      const p = (t: number) => {
+        const q = start.clone().lerp(end, t);
+        q.y -= Math.sin(Math.PI * t) * 1.6 * (1 - t * 0.3); // catenary-like sag, lying on the apron midway
+        q.y = Math.max(0.06, q.y);
+        return q;
+      };
+      const a = p(i / n);
+      const b = p((i + 1) / n);
+      const seg = new CylinderGeometry(0.055, 0.055, a.distanceTo(b) + 0.01, 10);
+      seg.translate(0, a.distanceTo(b) / 2, 0);
+      const dir = b.clone().sub(a).normalize();
+      seg.applyMatrix4(new Matrix4().makeBasis(...basisFor(dir)).setPosition(a));
+      const ng = seg.toNonIndexed();
+      ng.deleteAttribute('uv');
+      f.parts.rubber.push(ng);
+    }
+    f.vehicle(STAND.x + 21, zs(33), Math.PI / 2);
+    f.cyl('chassis', -4.9, 1.25, 0, 0.55, 1.6, 'z', 24); // hose reel
+  }
 
   // Ground power unit beside the nose, with its cable to the receptacle
   f.vehicle(STAND.x + 5.2, zs(3.5), 0);
@@ -172,7 +241,5 @@ export function buildGse(): Record<GseMaterial, BufferGeometry> {
   c2.deleteAttribute('uv');
   f.parts.rubber.push(c2);
 
-  const out = {} as Record<GseMaterial, BufferGeometry>;
-  for (const k of Object.keys(f.parts) as GseMaterial[]) out[k] = mergeGeometries(f.parts[k])!;
-  return out;
+  return merged(f);
 }

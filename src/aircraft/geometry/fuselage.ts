@@ -332,10 +332,12 @@ export function conformalShape(
   outline: [number, number][],
   offset: number,
   rings = 3,
+  atlasUV = false,
 ): BufferGeometry {
   // side=+1: local horizontal axis runs forward (−s) when viewed from outside starboard.
   const pts: Vec3[] = [];
   const nrm: Vec3[] = [];
+  const uvs: [number, number][] = [];
   const push = (ds: number, dy: number) => {
     const ss = s + ds;
     const th = thetaAtHeight(ss, y + dy, side);
@@ -343,6 +345,8 @@ export function conformalShape(
     const n = fuselageNormal(ss, th);
     pts.push([p[0] + n[0] * offset, p[1] + n[1] * offset, p[2] + n[2] * offset]);
     nrm.push(n);
+    // the same (station, angle) mapping as the fuselage skin, so paint runs across the panel
+    uvs.push([ss / L, (th + Math.PI / 2) / (Math.PI * 2)]);
   };
   push(0, 0);
   for (let r = 1; r <= rings; r++) for (const [ds, dy] of outline) push((ds * r) / rings, (dy * r) / rings);
@@ -357,7 +361,7 @@ export function conformalShape(
       idx.push(a0 + k, b0 + k, b0 + k1, a0 + k, b0 + k1, a0 + k1);
     }
   }
-  return fromArrays(pts, nrm, idx);
+  return fromArrays(pts, nrm, idx, atlasUV ? uvs : undefined);
 }
 
 /** Bilinear patch in (s, θ) parameter space — used for the flight-deck glazing. */
@@ -382,11 +386,11 @@ export function patchSTheta(corners: [number, number][], offset: number, nu = 8,
   return g;
 }
 
-function fromArrays(pts: Vec3[], nrm: Vec3[], idx: number[]): BufferGeometry {
+function fromArrays(pts: Vec3[], nrm: Vec3[], idx: number[], uvs?: [number, number][]): BufferGeometry {
   const g = new BufferGeometryCtor();
   g.setAttribute('position', new BufferAttributeCtor(new Float32Array(pts.flat()), 3));
   g.setAttribute('normal', new BufferAttributeCtor(new Float32Array(nrm.flat()), 3));
-  g.setAttribute('uv', new BufferAttributeCtor(new Float32Array(pts.length * 2), 2));
+  g.setAttribute('uv', new BufferAttributeCtor(uvs ? new Float32Array(uvs.flat()) : new Float32Array(pts.length * 2), 2));
   g.setIndex(idx);
   // Make the winding agree with the stored normals.
   const p0 = pts[idx[0]!]!, p1 = pts[idx[1]!]!, p2 = pts[idx[2]!]!;

@@ -6,6 +6,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Mesh } from 'three';
 import { focusObjects, getControls, onControls } from '../camera/controls';
 import { useUI } from '../state/ui';
+import { useTools } from '../tools/toolsState';
 import { applyMaterialModes } from './materialDirector';
 import { getRig, onRig } from './rig';
 import { resolveSelection, unitByNode, type SelectionUnit } from './selection';
@@ -44,7 +45,7 @@ onRig(() => {
 
 const interactive = () => {
   const s = useUI.getState();
-  return !s.photoMode && (s.section === 'explore' || s.section === 'anatomy' || s.section === 'systems' || s.section === 'specs');
+  return !s.photoMode && useTools.getState().pick === 'none' && (s.section === 'explore' || s.section === 'anatomy' || s.section === 'systems' || s.section === 'specs');
 };
 
 export function onPointerMove(e: ThreeEvent<PointerEvent>): void {

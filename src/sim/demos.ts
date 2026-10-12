@@ -5,7 +5,7 @@
  */
 import { systems } from './systems';
 
-type Demo = 'gear' | 'flaps' | 'spoilers' | 'ailerons' | 'elevators' | 'rudder' | 'engines' | 'reversers' | 'doors' | 'cargo';
+type Demo = 'gear' | 'flaps' | 'spoilers' | 'ailerons' | 'elevators' | 'rudder' | 'engines' | 'reversers' | 'doors' | 'cargo' | 'evacuate';
 
 const timers: number[] = [];
 let token = 0;
@@ -78,6 +78,23 @@ export function runDemo(d: Demo): string {
         },
       );
       return 'Gear swing test: aircraft on jacks, gear retracts then extends';
+    }
+    case 'evacuate': {
+      if (Object.values(s.doors).some((d) => d.slide > 0)) {
+        systems.restowSlides();
+        return 'Slides repacked, doors closing';
+      }
+      ensureGroundPower();
+      // close everything, arm every slide, then pull the handles
+      for (const d of Object.values(s.doors)) if (d.kind === 'passenger') d.target = 0;
+      when(
+        () => Object.values(systems.state.doors).every((d) => d.kind !== 'passenger' || d.position < 0.01),
+        () => {
+          for (const d of Object.values(systems.state.doors)) if (d.kind === 'passenger') systems.armDoor(d.id, true);
+          systems.evacuate();
+        },
+      );
+      return 'Evacuation: all 16 doors armed and opened — slides inflate in about six seconds';
     }
     case 'flaps': {
       ensureGroundPower();
