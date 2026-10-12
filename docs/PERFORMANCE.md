@@ -23,17 +23,23 @@ cloud build environment.
 
 | What | Raw | gzip (as served by Cloudflare) |
 |---|---|---|
-| App JavaScript (React, three.js, R3F, drei, postprocessing, app code) | 1.99 MB | 635 kB |
+| App JavaScript (React, three.js, R3F, drei, postprocessing, app code) | 2.13 MB | 681 kB |
+| Path tracer chunk (loaded on first use of Rendered shading) + BVH worker | 324 kB | 91 kB |
+| Atlas-painting worker | 24 kB | 10 kB |
 | CSS | 55 kB | 11 kB |
 | Fonts (Inter, JetBrains Mono; Latin subsets load first) | 88 kB (Latin) | — (woff2) |
-| Exterior `lo` (airframe, wings, empennage, engines, gear), about 203k triangles | 1.28 MB | 477 kB |
-| Exterior `hi` (Balanced), about 346k triangles | 1.78 MB | 672 kB |
-| Exterior `ultra` (High and Ultra), about 1.05M triangles | 4.17 MB | 1.44 MB |
+| Exterior `lo` (airframe, wings, empennage, engines, gear), about 237k triangles | 1.61 MB | 585 kB |
+| Exterior `hi` (Balanced), about 386k triangles | 2.14 MB | 786 kB |
+| Exterior `ultra` (High and Ultra), about 1.11M triangles | 4.63 MB | 1.59 MB |
 | Structure (lazy, X-ray) | 147 kB | 48 kB |
-| Cabin (lazy): `hi` / `lo` (phones) | 1.94 / 1.75 MB | 439 / 345 kB |
-| Flight deck (lazy) | 1.24 MB | 279 kB |
+| Cabin (lazy): `hi` / `lo` (phones) | 2.55 / 2.12 MB | 555 / 420 kB |
+| Flight deck (lazy) | 1.26 MB | 282 kB |
 | HDR environment, one per environment, loaded on first use | 0.11–1.67 MB | 0.11–1.43 MB |
-| **Whole site** (`dist/`) | 18 MB | — |
+| **Whole site** (`dist/`) | 21 MB | — |
+
+Skin textures are not downloaded: they are painted on the device (see the atlas sizes in
+ARCHITECTURE.md). At Ultra/High the five atlases occupy roughly 0.4 GB of GPU memory with
+mipmaps; Balanced about a quarter of that, Performance about a sixteenth.
 
 The app becomes interactive once `lo` has loaded. The tier the preset asks for then streams in
 and replaces it. Interiors and environment maps are fetched only when first used. A desktop
@@ -58,6 +64,10 @@ negligible.
 
 Every vertex also carries a baked ambient-occlusion value: 35 M rays in total, about six
 minutes on four CPU cores. The rebuild is skipped when the geometry sources are unchanged.
+
+> The tables below were measured before the rendering/tools/realism upgrade (October 2026).
+> The exterior grew by about 6 % in triangles (micro-detail) and the cabin by about 14 %
+> (headrest covers, pillows, bar lounge); per-view figures have not been re-measured.
 
 ## Renderer statistics per view
 

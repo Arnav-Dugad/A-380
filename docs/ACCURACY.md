@@ -60,6 +60,17 @@ measures it.
   Typical transport-aircraft layout. Frames are drawn at every third frame bay for
   legibility.
 
+### Photograph overlay check (October 2026)
+
+A near-orthographic side silhouette of the model (6° lens from 700 m) was overlaid on a
+side-view photograph of an A380 scaled to the same nose-to-tail length. Nose profile, crown
+hump, upper-deck taper, belly fairing, nacelles, nose-gear station and tail-cone upsweep
+agree to within a few pixels (roughly 0.2–0.3 m). The fin tip sat about 1.2 m too far
+forward; its leading-edge tip station moved from 66.4 m to 67.6 m (quarter-chord sweep about
+37°), keeping the tip trailing edge inside the published 72.72 m overall length. The
+photograph has some perspective, so this is a visual check, not a measurement. The
+in-app **Reference image** tool repeats the comparison with any image.
+
 ### Illustrative
 
 - The livery: a fictional "Digital Twin" scheme.

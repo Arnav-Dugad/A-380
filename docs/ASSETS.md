@@ -79,5 +79,9 @@ with or endorsed by these companies.
   E.012). Full list in [RESEARCH.md](RESEARCH.md).
 - Cabin class totals: British Airways' published A380 fleet facts.
 - Open-source software: three.js, React Three Fiber, drei, postprocessing, zustand, React,
-  Vite, Tailwind CSS, glTF Transform, meshoptimizer, Playwright, Vitest. All are MIT or
-  Apache-2.0 licensed.
+  Vite, Tailwind CSS, glTF Transform, meshoptimizer, three-mesh-bvh, three-gpu-pathtracer,
+  Playwright, Vitest. All are MIT or Apache-2.0 licensed.
+- Reference photographs supplied by the project owner (exterior views, an A380 flight-deck
+  overhead at night, and a contemporary A380 cabin) guided proportions, materials and
+  colours. They are not redistributed and no airline branding was copied: titles, emblems
+  and registrations on the model are fictional.
