@@ -56,6 +56,14 @@ src/debug/bridge.ts         automation API (window.__a380) used by the Playwrigh
   3. Structure, cabin and cockpit GLBs, fetched only when X-ray, the cabin or the cockpit is
      opened.
 
+- **Panel-aware framing.** Interface panels report the screen area they cover
+  (`src/camera/viewInset.ts`). The camera's view offset moves the principal point to the
+  centre of the visible area. Presets and focus distances are fitted to that area, so the
+  same shots work on a desktop beside a side panel and on a portrait phone above a bottom
+  sheet.
+- **One input path.** Keyboard, gamepad and on-screen touch controls all write to the same
+  flight inputs and system commands.
+
 ## Quality presets
 
 | Preset | DPR | Shadows | AO | Post | Geometry |

@@ -21,6 +21,7 @@ import { World } from './World';
 import { Cinematic } from '../camera/Cinematic';
 import { PhotoBridge } from '../ui/PhotoMode';
 import { worldFrame } from './worldFrame';
+import { ViewInsetRig } from '../camera/ViewInsetRig';
 
 const DPR: Record<string, [number, number]> = { ultra: [1, 2], high: [1, 1.75], balanced: [0.85, 1.25], performance: [0.6, 1] };
 
@@ -66,6 +67,7 @@ export function Viewport() {
       {env === 'studio' && section !== 'flight' && quality === 'performance' && <ContactShadows position={[0, 0.02, 0]} scale={150} blur={2.6} far={14} opacity={0.7} resolution={1024} frames={1} />}
       <CameraControls ref={setControls} makeDefault minDistance={2} maxDistance={900} maxPolarAngle={Math.PI / 2 - 0.02} />
       <Cinematic />
+      <ViewInsetRig />
       <PhotoBridge />
       <Effects />
       <PerfProbe />

@@ -17,13 +17,15 @@ const C = '#6fd3ef';
 const A = '#ffb347';
 const R = '#ff5a4f';
 
-export function FlightHUD() {
+export function FlightHUD({ compact = false }: { compact?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const replaying = useUI((s) => s.replay);
   const paused = useUI((s) => s.flightPaused);
   const cam = useUI((s) => s.flightCam);
   useSim((s) => s.version);
   const crashed = flight.state.crashed;
+  const compactRef = useRef(compact);
+  compactRef.current = compact;
 
   useEffect(() => {
     let raf = 0;
@@ -44,10 +46,13 @@ export function FlightHUD() {
       const s = flight.state;
       const sys = systems.state;
       const a = sys.air;
+      const narrow = compactRef.current;
       const cx = w / 2;
-      const cy = h * 0.46;
+      // On phones the touch controls take the lower part of the screen
+      const cy = narrow ? h * 0.4 : h * 0.46;
       ctx.lineWidth = 1.5;
-      ctx.font = '600 13px "JetBrains Mono Variable", monospace';
+      const fs = narrow ? 11 : 13;
+      ctx.font = `600 ${fs}px "JetBrains Mono Variable", monospace`;
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0,0,0,0.6)';
       ctx.shadowBlur = 4;
@@ -98,7 +103,7 @@ export function FlightHUD() {
       ctx.lineTo(cx + 12, cy);
       ctx.stroke();
       // Speed tape (left)
-      const tapeH = Math.min(320, h * 0.42);
+      const tapeH = narrow ? Math.min(220, h * 0.3) : Math.min(320, h * 0.42);
       const lx = cx - Math.min(360, w * 0.3);
       ctx.strokeStyle = 'rgba(125,255,176,0.5)';
       ctx.strokeRect(lx - 34, cy - tapeH / 2, 68, tapeH);
@@ -165,7 +170,7 @@ export function FlightHUD() {
         ctx.fillText(`ALT ${autopilot.alt}`, rx, cy - tapeH / 2 - 14);
       }
       // Heading scale (top)
-      const hy = 92;
+      const hy = narrow ? 70 : 92;
       ctx.fillStyle = G;
       ctx.strokeStyle = G;
       for (let d = Math.floor(a.heading / 5) * 5 - 30; d <= a.heading + 30; d += 5) {
@@ -199,12 +204,28 @@ export function FlightHUD() {
         [`${s.nz.toFixed(2)} G  α ${((s.alpha * 180) / Math.PI).toFixed(1)}°`, G],
         [sys.brakes.parking ? 'PARK BRK' : sys.brakes.autobrake !== 'DISARM' ? `A/BRK ${sys.brakes.autobrake}` : '', sys.brakes.parking ? A : G],
       ];
-      let x = Math.max(20, cx - 470);
-      for (const [t, col] of items) {
-        if (!t) continue;
-        ctx.fillStyle = col;
-        ctx.fillText(t, x, by);
-        x += ctx.measureText(t).width + 26;
+      if (narrow) {
+        // two centred lines under the heading scale
+        ctx.font = '600 10.5px "JetBrains Mono Variable", monospace';
+        const lines: [string, string][][] = [[], []];
+        items.filter(([t]) => t).forEach((it, i) => lines[i < 3 ? 0 : 1]!.push(it));
+        lines.forEach((line, li) => {
+          const widths = line.map(([t]) => ctx.measureText(t).width);
+          let x = cx - (widths.reduce((a, b) => a + b, 0) + (line.length - 1) * 14) / 2;
+          line.forEach(([t, col], i) => {
+            ctx.fillStyle = col;
+            ctx.fillText(t, x, hy + 44 + li * 16);
+            x += widths[i]! + 14;
+          });
+        });
+      } else {
+        let x = Math.max(20, cx - 470);
+        for (const [t, col] of items) {
+          if (!t) continue;
+          ctx.fillStyle = col;
+          ctx.fillText(t, x, by);
+          x += ctx.measureText(t).width + 26;
+        }
       }
       // Alerts
       const warn = [...sys.annunciations.filter((x) => x.level === 'warning'), ...flight.events.filter((e) => s.t - e.t < 4).map((e) => ({ text: e.text, level: 'warning' }))];
@@ -223,13 +244,18 @@ export function FlightHUD() {
     <>
       <canvas ref={ref} className={`pointer-events-none absolute inset-0 h-full w-full ${cam === 'cockpit' ? 'opacity-60' : ''}`} aria-hidden="true" />
       {(crashed || replaying || paused) && (
-        <div className="pointer-events-auto absolute left-1/2 top-[22%] -translate-x-1/2 rounded-2xl border border-white/10 bg-graphite-900/85 px-6 py-4 text-center backdrop-blur-xl">
+        <div className="pointer-events-auto absolute left-1/2 top-[22%] w-max max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-graphite-900/85 px-6 py-4 text-center backdrop-blur-xl">
           <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-graphite-300">{crashed ? 'Simulation stopped' : replaying ? 'Replay' : 'Paused'}</div>
-          <div className="mt-1 text-[15px] text-paper">{crashed ?? (replaying ? 'Playing back the last three minutes' : 'Press Space to resume')}</div>
+          <div className="mt-1 text-[15px] text-paper">{crashed ?? (replaying ? 'Playing back the last three minutes' : compact ? 'Flight paused' : 'Press Space to resume')}</div>
           <div className="mt-3 flex justify-center gap-2">
             {crashed && (
               <Button size="sm" variant="accent" onClick={resetFlight}>
                 Reset scenario
+              </Button>
+            )}
+            {paused && !crashed && !replaying && (
+              <Button size="sm" variant="accent" icon="play" onClick={() => useUI.getState().set({ flightPaused: false })}>
+                Resume
               </Button>
             )}
             {replaying && (

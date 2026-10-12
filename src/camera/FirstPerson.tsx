@@ -97,6 +97,18 @@ export const firstPerson = {
   },
 };
 
+/**
+ * Poses specify the vertical field of view for a landscape screen. On a portrait screen that
+ * leaves a keyhole view, so the vertical angle widens until the horizontal angle is at least
+ * 72 % of what a 16:10 screen shows (capped at 96°).
+ */
+export function fitFov(fov: number, aspect: number): number {
+  const t = Math.tan((fov * Math.PI) / 360);
+  const wantH = Math.atan(t * 1.6) * 0.72;
+  const needed = (Math.atan(Math.tan(wantH) / Math.max(0.2, aspect)) * 360) / Math.PI;
+  return Math.min(96, Math.max(fov, needed));
+}
+
 const euler = new Euler(0, 0, 0, 'YXZ');
 const IDENTITY = new Matrix4();
 const tmpM = new Matrix4();
@@ -144,12 +156,32 @@ export function FirstPersonRig() {
 
   useEffect(() => {
     const el = gl.domElement;
+    // active touches on the canvas: one drags the view, two pinch to zoom
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    const spread = () => {
+      const [a, b] = [...touches.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
     const down = (e: PointerEvent) => {
       if (state.mode === 'off') return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2) {
+        pinch = spread();
+        state.dragging = false;
+        return;
+      }
       state.dragging = true;
       state.last = { x: e.clientX, y: e.clientY };
     };
     const move = (e: PointerEvent) => {
+      if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (state.mode !== 'off' && touches.size === 2 && pinch > 0) {
+        const d = spread();
+        state.fov = MathUtils.clamp((state.fov * pinch) / Math.max(1, d), 22, 85);
+        pinch = d;
+        return;
+      }
       if (state.mode === 'off' || !state.dragging || state.target) return;
       const dx = e.clientX - state.last.x;
       const dy = e.clientY - state.last.y;
@@ -159,7 +191,11 @@ export function FirstPersonRig() {
       state.yaw -= dx * k;
       state.pitch = MathUtils.clamp(state.pitch - dy * k, -1.35, 1.35);
     };
-    const up = () => (state.dragging = false);
+    const up = (e: PointerEvent) => {
+      touches.delete(e.pointerId);
+      if (touches.size < 2) pinch = 0;
+      state.dragging = false;
+    };
     const wheel = (e: WheelEvent) => {
       if (state.mode === 'off') return;
       e.preventDefault();
@@ -179,6 +215,7 @@ export function FirstPersonRig() {
     el.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
     el.addEventListener('wheel', wheel, { passive: false });
     window.addEventListener('keydown', kd);
     window.addEventListener('keyup', ku);
@@ -186,6 +223,7 @@ export function FirstPersonRig() {
       el.removeEventListener('pointerdown', down);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       el.removeEventListener('wheel', wheel);
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
@@ -203,7 +241,7 @@ export function FirstPersonRig() {
       q.setFromEuler(euler);
       camera.position.lerpVectors(tg.from.pos, tg.pos, k);
       camera.quaternion.slerpQuaternions(tg.from.q, q, k);
-      camera.fov = MathUtils.lerp(tg.from.fov, tg.fov, k);
+      camera.fov = MathUtils.lerp(tg.from.fov, fitFov(tg.fov, camera.aspect), k);
       camera.updateProjectionMatrix();
       attachToAircraft(camera);
       if (tg.t >= 1) {
@@ -234,8 +272,9 @@ export function FirstPersonRig() {
     camera.quaternion.setFromEuler(euler);
     camera.position.copy(state.pos);
     attachToAircraft(camera);
-    if (Math.abs(camera.fov - state.fov) > 0.01) {
-      camera.fov = state.fov;
+    const fov = fitFov(state.fov, camera.aspect);
+    if (Math.abs(camera.fov - fov) > 0.01) {
+      camera.fov = fov;
       camera.updateProjectionMatrix();
     }
   });

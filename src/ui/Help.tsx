@@ -1,4 +1,5 @@
 import { Icon } from './icons';
+import { useTouch } from './useMedia';
 import { Group, Kbd, Label, Panel } from './kit';
 
 const KEYS: [string, string][] = [
@@ -16,9 +17,42 @@ const KEYS: [string, string][] = [
   ['?', 'This help'],
 ];
 
-export function HelpPanel({ onClose }: { onClose: () => void }) {
+const TOUCH: [string, string][] = [
+  ['One finger', 'Orbit the aircraft · look around inside'],
+  ['Two fingers', 'Pinch to zoom · drag to pan'],
+  ['Tap', 'Inspect a component · operate a cockpit control · pick a seat'],
+  ['Joystick', 'Walk the cabin · fly (left stick, throttle on the right)'],
+  ['Panel handle', 'Drag or tap to resize the panel'],
+];
+
+export function HelpPanel({ onClose, wide = false }: { onClose: () => void; wide?: boolean }) {
+  const touch = useTouch();
+  if (touch)
+    return (
+      <Panel className={wide ? 'a380-scroll w-full overflow-y-auto' : 'a380-enter w-[380px]'} role="dialog" aria-label="Help">
+        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+          <Label className="text-ice-400/90">Help</Label>
+          <button type="button" onClick={onClose} aria-label="Close help" className="grid h-9 w-9 place-items-center rounded-lg text-graphite-400 hover:bg-white/[0.06] hover:text-paper">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        <Group label="Touch gestures">
+          <dl className="grid grid-cols-[96px_1fr] gap-y-2.5 text-[12.5px]">
+            {TOUCH.map(([k, d]) => (
+              <div key={k} className="contents">
+                <dt className="font-mono text-[11px] text-ice-300">{k}</dt>
+                <dd className="text-paper/85">{d}</dd>
+              </div>
+            ))}
+          </dl>
+        </Group>
+        <Group label="Tip">
+          <p className="text-[12px] leading-relaxed text-graphite-300">If the view stutters, choose the Performance preset under Settings. Rotate the phone to landscape for a wider view while flying.</p>
+        </Group>
+      </Panel>
+    );
   return (
-    <Panel className="a380-enter w-[380px] max-w-[calc(100vw-32px)]" role="dialog" aria-label="Help and keyboard shortcuts">
+    <Panel className={wide ? 'a380-scroll w-full overflow-y-auto' : 'a380-enter w-[380px]'} role="dialog" aria-label="Help and keyboard shortcuts">
       <div className="flex items-center justify-between px-5 pb-2 pt-4">
         <Label className="text-ice-400/90">Help</Label>
         <button type="button" onClick={onClose} aria-label="Close help" className="grid h-7 w-7 place-items-center rounded-lg text-graphite-400 hover:bg-white/[0.06] hover:text-paper">

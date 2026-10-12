@@ -4,6 +4,7 @@ import { firstPerson } from '../../camera/FirstPerson';
 import { COCKPIT_VIEWS, CONTROL_LABELS, cockpitLights, operate } from '../../interior/CockpitScene';
 import { useSim } from '../../state/sim';
 import { Button, Group, Label, ScrollArea, SectionTitle, Toggle, cx } from '../kit';
+import { useTouch } from '../useMedia';
 
 /** Mirrors a live display canvas into the 2D panel for close reading. */
 function ScreenMirror({ name, className }: { name: ScreenName; className?: string }) {
@@ -27,6 +28,7 @@ function ScreenMirror({ name, className }: { name: ScreenName; className?: strin
 const PANEL_CONTROLS = ['BAT', 'EXT_PWR', 'APU_MASTER', 'APU_START', 'APU_BLEED', 'ENG_START', 'ENG_MASTER_1', 'ENG_MASTER_2', 'ENG_MASTER_3', 'ENG_MASTER_4', 'THRUST_1', 'FLAPS', 'SPEEDBRAKE', 'GEAR', 'AUTOBRAKE', 'PARK_BRAKE', 'LT_BEACON', 'LT_NAV', 'LT_STROBE', 'LT_LAND', 'SEAT_BELTS', 'CABIN_LT'];
 
 export function CockpitPanel() {
+  const touch = useTouch();
   const [view, setView] = useState('captain');
   const [screen, setScreen] = useState<ScreenName>('PFD_C');
   const [page, setPage] = useState<SdPage>(displayState.sdPage);
@@ -36,7 +38,7 @@ export function CockpitPanel() {
   return (
     <ScrollArea className="max-h-full">
       <SectionTitle eyebrow="Cockpit" title="Flight deck">
-        Eight identical displays, side-sticks and a centre pedestal. Drag to look around, scroll to zoom; hover a control to identify it and click to operate it.
+        Eight identical displays, side-sticks and a centre pedestal. {touch ? 'Drag to look around, pinch to zoom; tap a control to operate it.' : 'Drag to look around, scroll to zoom; hover a control to identify it and click to operate it.'}
       </SectionTitle>
       <Group label="Viewpoint">
         <div className="grid grid-cols-3 gap-1.5">
@@ -87,7 +89,7 @@ export function CockpitPanel() {
         )}
       </Group>
       <Group label="Controls">
-        <p className="mb-2 text-[11px] leading-relaxed text-graphite-400">The same actions as clicking the 3D controls — keyboard accessible.</p>
+        <p className="mb-2 text-[11px] leading-relaxed text-graphite-400">The same actions as the 3D controls, as accessible buttons.</p>
         <div className="grid grid-cols-2 gap-1">
           {PANEL_CONTROLS.map((id) => (
             <button key={id} type="button" onClick={() => setMsg(operate(id))} className="truncate rounded-md border border-white/[0.06] bg-white/[0.02] px-2 py-1.5 text-left text-[11px] text-paper/80 transition-colors hover:border-white/[0.14] hover:text-paper">

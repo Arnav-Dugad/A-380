@@ -13,6 +13,8 @@ const CAMS: FlightCam[] = ['chase', 'cockpit', 'wing', 'tower', 'flyby'];
 let prevButtons: boolean[] = [];
 
 export const inputState = { gamepad: false, pitch: 0, roll: 0, yaw: 0 };
+/** Written by the on-screen touch controls; the stick is analogue, like a gamepad. */
+export const touchInput = { stick: false, pitch: 0, roll: 0, brake: 0 };
 
 function onDown(e: KeyboardEvent) {
   if (useUI.getState().section !== 'flight') return;
@@ -128,9 +130,15 @@ export function sampleInput(dt: number): void {
     if (edge(9)) toggleAP();
     prevButtons = pressed;
   }
-  // keyboard axes ramp in and spring back; gamepad axes are absolute
-  inputState.pitch = gp && Math.abs(pitchT) > 0 ? pitchT : approach(inputState.pitch, pitchT, pitchT === 0 ? 3 : 1.6, dt);
-  inputState.roll = gp && Math.abs(rollT) > 0 ? rollT : approach(inputState.roll, rollT, rollT === 0 ? 4 : 2.2, dt);
+  if (touchInput.stick) {
+    pitchT = touchInput.pitch;
+    rollT = touchInput.roll;
+  }
+  brake = Math.max(brake, touchInput.brake);
+  // keyboard axes ramp in and spring back; gamepad and touch-stick axes are absolute
+  const analog = !!gp || touchInput.stick;
+  inputState.pitch = analog && Math.abs(pitchT) > 0 ? pitchT : approach(inputState.pitch, pitchT, pitchT === 0 ? 3 : 1.6, dt);
+  inputState.roll = analog && Math.abs(rollT) > 0 ? rollT : approach(inputState.roll, rollT, rollT === 0 ? 4 : 2.2, dt);
   inputState.yaw = gp && Math.abs(yawT) > 0 ? yawT : approach(inputState.yaw, yawT, yawT === 0 ? 3 : 2, dt);
   flight.inputs.pitch = inputState.pitch;
   flight.inputs.roll = inputState.roll;

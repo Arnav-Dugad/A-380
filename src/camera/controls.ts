@@ -4,6 +4,7 @@
  */
 import type CameraControlsImpl from 'camera-controls';
 import { Box3, Vector3, type Object3D } from 'three';
+import { fitScale, freeHalfTan } from './viewInset';
 
 let controls: CameraControlsImpl | null = null;
 const listeners = new Set<(c: CameraControlsImpl | null) => void>();
@@ -48,14 +49,26 @@ export const PRESETS: CameraPreset[] = [
   { id: 'tail', label: 'Tail', pos: [-48, 16, 26], target: [-28, 14, 0] },
 ];
 
-export async function flyTo(pos: [number, number, number], target: [number, number, number], animate = true): Promise<void> {
+/**
+ * Move the camera to a pose. With `fit`, the camera backs away from the target along the same
+ * line until the shot composed for a desktop screen fits the visible area (portrait phones,
+ * open bottom sheet).
+ */
+export async function flyTo(pos: [number, number, number], target: [number, number, number], animate = true, fit = false): Promise<void> {
   if (!controls) return;
-  await controls.setLookAt(pos[0], pos[1], pos[2], target[0], target[1], target[2], animate);
+  let [x, y, z] = pos;
+  if (fit) {
+    const k = fitScale();
+    x = target[0] + (x - target[0]) * k;
+    y = Math.max(0.6, target[1] + (y - target[1]) * k);
+    z = target[2] + (z - target[2]) * k;
+  }
+  await controls.setLookAt(x, y, z, target[0], target[1], target[2], animate);
 }
 
 export function goPreset(id: string, animate = true): Promise<void> {
   const p = PRESETS.find((x) => x.id === id) ?? PRESETS[0]!;
-  return flyTo(p.pos, p.target, animate);
+  return flyTo(p.pos, p.target, animate, true);
 }
 
 const box = new Box3();
@@ -78,8 +91,9 @@ export async function focusObjects(objects: Object3D[], padding = 0.35): Promise
   // Avoid looking from under the ground plane.
   if (centre.y + dir.y * radius * 3 < 0.4) dir.y = Math.abs(dir.y) + 0.15;
   dir.normalize();
-  const fov = ((cam as { fov?: number }).fov ?? 35) * (Math.PI / 180);
-  const dist = (radius * (1 + padding)) / Math.sin(fov / 2);
+  // fit the bounding sphere into the visible area's tighter axis
+  const half = Math.atan(freeHalfTan((cam as { fov?: number }).fov ?? 35));
+  const dist = (radius * (1 + padding)) / Math.sin(half);
   const p = centre.clone().addScaledVector(dir, Math.max(dist, 3));
   p.y = Math.max(p.y, 0.5);
   await controls.setLookAt(p.x, p.y, p.z, centre.x, centre.y, centre.z, true);

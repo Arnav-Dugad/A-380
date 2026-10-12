@@ -8,6 +8,7 @@ export type Weather = 'clear' | 'overcast' | 'lightRain' | 'heavyRain' | 'fog' |
 export type ExplodeGroup = 'all' | 'engines' | 'gear' | 'wings' | 'empennage' | 'fuselage';
 export type FlightCam = 'chase' | 'cockpit' | 'tower' | 'wing' | 'flyby';
 export type FlightScenario = 'coldDark' | 'taxi' | 'ready' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'approach' | 'landing' | 'free';
+export type SheetSnap = 'peek' | 'half' | 'full';
 export type SystemLayer = 'none' | 'flightControls' | 'landingGear' | 'propulsion' | 'doors' | 'structure' | 'cabin';
 
 export interface XRay {
@@ -46,6 +47,8 @@ export interface UIState {
   flightScenario: FlightScenario;
   flightPaused: boolean;
   replay: boolean;
+  /** mobile bottom-sheet position */
+  sheet: SheetSnap;
   set: (patch: Partial<UIState>) => void;
   setXRay: (patch: Partial<XRay>) => void;
   select: (id: string | null, node?: string | null) => void;
@@ -67,6 +70,17 @@ const safeStorage = createJSONStorage(() => {
   }
 });
 
+/**
+ * First-visit graphics preset by device class (a saved choice always wins): phones get the
+ * lightest preset, tablets Balanced, everything else High.
+ */
+function initialQuality(): Quality {
+  if (typeof window === 'undefined' || !window.matchMedia) return 'high';
+  const coarse = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  if (!coarse) return 'high';
+  return Math.min(window.screen.width, window.screen.height) < 600 ? 'performance' : 'balanced';
+}
+
 export const useUI = create<UIState>()(
   persist(
     (set) => ({
@@ -75,7 +89,7 @@ export const useUI = create<UIState>()(
       selectedNode: null,
       hovered: null,
       env: 'studio',
-      quality: 'high',
+      quality: initialQuality(),
       exposure: 1,
       weather: 'clear',
       timeOfDay: 15.5,
@@ -94,6 +108,7 @@ export const useUI = create<UIState>()(
       flightScenario: 'ready',
       flightPaused: false,
       replay: false,
+      sheet: 'half',
       set: (patch) => set(patch),
       setXRay: (patch) => set((s) => ({ xray: { ...s.xray, ...patch } })),
       select: (id, node = null) => set({ selected: id, selectedNode: id ? node : null }),

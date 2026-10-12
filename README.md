@@ -23,6 +23,21 @@ model lets you fly it.
 | **Flight** | Ten scenarios from cold & dark to landing, protected or direct control law, autopilot and autothrust, weather and time of day, five cameras, HUD, replay; keyboard and gamepad |
 | **Specifications** | Published data, each value marked verified, approximation or unverified, with its source |
 
+## On phones and tablets
+
+The interface adapts to the device:
+
+- **Portrait phones:** bottom navigation and a draggable bottom sheet (peek, half, full).
+  The 3D view re-centres in the space the sheet leaves free, and camera shots back off to
+  fit a portrait screen.
+- **Landscape phones:** a collapsible side panel.
+- **Touch controls:** a joystick for walking the cabin. Flight mode gets a side-stick, a
+  thrust slider and buttons for gear, flaps, brakes, speed brake, autopilot and camera.
+  Pinch zooms in first person.
+- **Graphics:** first visits start on a preset suited to the device class (Performance on
+  phones, Balanced on tablets, High on desktops).
+- **Home screen:** it can be added to the home screen as a full-screen web app.
+
 ## Quick start
 
 ```bash

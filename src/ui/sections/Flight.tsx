@@ -7,6 +7,7 @@ import { flight } from '../../sim/flight';
 import { useSim } from '../../state/sim';
 import { useUI, type FlightCam, type Weather } from '../../state/ui';
 import { Button, Group, Kbd, Label, ScrollArea, SectionTitle, Segmented, Slider, cx } from '../kit';
+import { useTouch } from '../useMedia';
 
 const WEATHER: { value: Weather; label: string }[] = [
   { value: 'clear', label: 'Clear' },
@@ -36,6 +37,7 @@ function Stepper({ label, value, onChange, step, fmt }: { label: string; value: 
 
 export function FlightPanel() {
   const ui = useUI();
+  const touch = useTouch();
   useSim((s) => s.version);
   const [, force] = useState(0);
   const upd = () => force((n) => n + 1);
@@ -143,7 +145,16 @@ export function FlightPanel() {
         </div>
         <Slider label="Time of day" value={ui.timeOfDay} min={4} max={22} step={0.25} onChange={(v) => ui.set({ timeOfDay: v })} format={(v) => `${Math.floor(v).toString().padStart(2, '0')}:${String(Math.round((v % 1) * 60)).padStart(2, '0')}`} />
       </Group>
-      <Group label="Controls" aside={<span className="font-mono text-[10px] text-graphite-500">{inputState.gamepad ? 'gamepad connected' : 'keyboard'}</span>}>
+      {touch && (
+        <Group label="Touch controls">
+          <ul className="space-y-1 text-[11.5px] leading-relaxed text-paper/80">
+            <li>Left stick: pitch and roll (steers the nose wheel below 25 kt).</li>
+            <li>Right slider: thrust levers; slide to the top for TOGA.</li>
+            <li>Buttons: gear, flaps, wheel brakes (hold), speed brake, autopilot and camera.</li>
+          </ul>
+        </Group>
+      )}
+      <Group label="Controls" className={touch ? 'hidden' : undefined} aside={<span className="font-mono text-[10px] text-graphite-500">{inputState.gamepad ? 'gamepad connected' : 'keyboard'}</span>}>
         <dl className="grid grid-cols-[86px_1fr] gap-y-1 text-[11.5px]">
           {[
             ['W / S', 'Pitch down / up'],

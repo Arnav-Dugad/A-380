@@ -22,16 +22,17 @@ export const ENVIRONMENTS: { id: EnvPreset; label: string; icon: IconName }[] = 
 ];
 
 function Brand() {
+  const set = useUI((s) => s.set);
   return (
-    <div className="pointer-events-auto flex items-center gap-3 select-none">
-      <div className="grid h-9 w-9 place-items-center rounded-xl border border-white/[0.08] bg-graphite-900/70 text-ice-400 backdrop-blur-xl">
+    <button type="button" onClick={() => set({ section: 'explore' })} aria-label="A380 — The Digital Twin, go to Explore" className="pointer-events-auto flex items-center gap-3 rounded-xl text-left select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ice-400/70">
+      <div className="grid h-9 w-9 place-items-center rounded-xl border border-white/[0.08] bg-graphite-900/70 text-ice-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
         <Icon name="flight" size={18} />
       </div>
-      <div className="hidden leading-none sm:block">
+      <div className="leading-none [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]">
         <div className="text-[13px] font-[600] tracking-[0.02em] text-paper">A380</div>
-        <div className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.22em] text-graphite-400">The Digital Twin</div>
+        <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-graphite-300">The Digital Twin</div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -51,13 +52,14 @@ export function SectionNav({ compact = false }: { compact?: boolean }) {
             title={`${s.label}  (${s.key})`}
             className={cx(
               'group relative flex items-center gap-2 rounded-xl font-[500] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ice-400/70',
-              compact ? 'h-12 flex-1 flex-col justify-center gap-1 px-1 text-[9.5px]' : 'h-9 px-3.5 text-[12.5px]',
+              compact ? 'h-[56px] flex-1 flex-col justify-center gap-1 px-0.5 text-[10px]' : 'h-9 px-3.5 text-[12.5px]',
               active ? 'text-paper' : 'text-graphite-400 hover:text-paper/90',
             )}
           >
             <Icon name={s.icon} size={compact ? 18 : 15} className={cx('transition-colors', active ? 'text-ice-400' : 'text-graphite-500 group-hover:text-graphite-300')} />
             <span className={cx(compact && 'leading-none')}>{compact && s.id === 'specs' ? 'Specs' : s.label}</span>
             {active && !compact && <span className="absolute inset-x-3.5 -bottom-[5px] h-px bg-gradient-to-r from-transparent via-ice-400 to-transparent" />}
+            {active && compact && <span className="absolute left-1/2 top-0 h-[2px] w-7 -translate-x-1/2 rounded-full bg-ice-400 shadow-[0_0_12px_rgba(111,211,239,0.8)]" />}
           </button>
         );
       })}
@@ -98,14 +100,16 @@ function EnvMenu() {
   );
 }
 
-export function TopBar({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) {
+export function TopBar({ onSettings, onHelp, compact = false }: { onSettings: () => void; onHelp: () => void; compact?: boolean }) {
   const set = useUI((s) => s.set);
   return (
-    <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4 sm:p-5">
+    <header className={cx('pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4', compact ? 'px-3 pb-3 pt-[max(10px,env(safe-area-inset-top))]' : 'p-5')}>
       <Brand />
-      <Panel className="hidden px-1.5 py-1 lg:block">
-        <SectionNav />
-      </Panel>
+      {!compact && (
+        <Panel className="px-1.5 py-1">
+          <SectionNav />
+        </Panel>
+      )}
       <Panel className="flex items-center gap-0.5 px-1 py-1">
         <EnvMenu />
         <IconButton icon="camera" label="Photo mode (P)" onClick={() => set({ photoMode: true })} />

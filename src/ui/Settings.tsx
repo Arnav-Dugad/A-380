@@ -9,10 +9,10 @@ export const QUALITY_INFO: Record<Quality, string> = {
   performance: 'Low-detail geometry, contact shadows only and reduced resolution for mobile devices.',
 };
 
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+export function SettingsPanel({ onClose, wide = false }: { onClose: () => void; wide?: boolean }) {
   const s = useUI();
   return (
-    <Panel className="a380-enter w-[340px] max-w-[calc(100vw-32px)]" role="dialog" aria-label="Graphics and settings">
+    <Panel className={wide ? 'a380-scroll w-full overflow-y-auto' : 'a380-enter w-[340px]'} role="dialog" aria-label="Graphics and settings">
       <div className="flex items-center justify-between px-5 pb-2 pt-4">
         <Label className="text-ice-400/90">Settings</Label>
         <button type="button" onClick={onClose} aria-label="Close settings" className="grid h-7 w-7 place-items-center rounded-lg text-graphite-400 hover:bg-white/[0.06] hover:text-paper">

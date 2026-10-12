@@ -2,11 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0b0d10" />
+    <meta name="color-scheme" content="dark" />
+    <title>A380 — The Digital Twin</title>
     <meta name="description" content="An interactive, educational Airbus A380-800 digital twin: explore the aircraft, its systems, cockpit, cabin and a simplified flight model in your browser." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>A380 — The Digital Twin</title>
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="A380 Twin" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="A380 — The Digital Twin" />
+    <meta property="og:description" content="Explore an articulated Airbus A380-800 in 3D: landing gear, high-lift devices, engines, a live flight deck, a two-deck cabin and a flyable flight model." />
+    <meta property="og:image" content="/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      /* shown until the app's own loader paints */
+      html, body { margin: 0; background: #0b0d10; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

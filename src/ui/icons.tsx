@@ -1,7 +1,7 @@
 /** Hand-drawn 24px line icon set (1.5px stroke) for a consistent, quiet visual language. */
 import type { SVGProps } from 'react';
 
-const P: Record<string, string> = {
+const P = {
   explore: 'M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18Zm0 0c2.5 2.4 3.8 5.4 3.8 9s-1.3 6.6-3.8 9M12 3c-2.5 2.4-3.8 5.4-3.8 9s1.3 6.6 3.8 9M3.6 9h16.8M3.6 15h16.8',
   anatomy: 'M12 3 3 7.5l9 4.5 9-4.5L12 3ZM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5',
   systems: 'M3 12h3.5l2.5-6 4 12 2.5-6H21',
@@ -35,6 +35,12 @@ const P: Record<string, string> = {
   keyboard: 'M3 7h18v11H3V7Zm4 7h10M6.5 10.5h.01M9.5 10.5h.01M12.5 10.5h.01M15.5 10.5h.01',
   chevronRight: 'M9 5l7 7-7 7',
   chevronDown: 'M5 9l7 7 7-7',
+  chevronUp: 'M5 15l7-7 7 7',
+  chevronLeft: 'M15 5l-7 7 7 7',
+  ruler: 'M3 16 16 3l5 5L8 21l-5-5Zm4-1 2 2m1-5 2 2m1-5 2 2',
+  users: 'M9 11a3.5 3.5 0 1 0 0-7a3.5 3.5 0 0 0 0 7Zm-6 9a6 6 0 0 1 12 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.5a6 6 0 0 1 3 5.5',
+  weight: 'M6.5 8h11l2.5 12H4L6.5 8ZM12 8a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5Z',
+  range: 'M3 18c3-8 6-12 9-12s6 4 9 12M3 18h18M12 6v2',
   layers: 'M12 4 3 8.5l9 4.5 9-4.5L12 4Z',
   explode: 'M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3',
   walk: 'M13 4.5a1.5 1.5 0 1 0 0-3a1.5 1.5 0 0 0 0 3ZM9 21l2.5-6.5L14 17v4M10.5 9.5 13 7l3 3 3 1M11.5 14.5l1-5.5M8 12l2.5-2.5',
@@ -45,7 +51,7 @@ const P: Record<string, string> = {
   stairs: 'M4 20h4v-4h4v-4h4V8h4',
   seat: 'M8 4v8a2 2 0 0 0 2 2h6M8 9h5M6 20l2-6M18 20l-2-6',
   gamepad: 'M7 9h10a4 4 0 0 1 3.9 4.8l-.7 3.4a2 2 0 0 1-3.5.8L15 16H9l-1.7 2a2 2 0 0 1-3.5-.8l-.7-3.4A4 4 0 0 1 7 9Zm1 3v3m-1.5-1.5h3M15.5 13h.01M17.5 14.5h.01',
-};
+} satisfies Record<string, string>;
 
 export type IconName = keyof typeof P;
 

@@ -123,3 +123,34 @@ canvas {
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes a380-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.a380-fade {
+  animation: a380-fade-in 0.22s ease-out both;
+}
+@keyframes a380-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.a380-sheet-in {
+  animation: a380-sheet-up 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .a380-fade,
+  .a380-sheet-in {
+    animation: none;
+  }
+}

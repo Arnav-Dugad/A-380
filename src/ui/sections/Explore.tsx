@@ -6,7 +6,15 @@ import { useSim } from '../../state/sim';
 import { useUI } from '../../state/ui';
 import { ENVIRONMENTS } from '../TopBar';
 import { Button, Group, ScrollArea, SectionTitle, cx } from '../kit';
-import { Icon } from '../icons';
+import { Icon, type IconName } from '../icons';
+import { useTouch } from '../useMedia';
+
+const HERO: { icon: IconName; value: string; unit: string; label: string }[] = [
+  { icon: 'ruler', value: '72.7', unit: 'm', label: 'Length' },
+  { icon: 'range', value: '79.8', unit: 'm', label: 'Span' },
+  { icon: 'weight', value: '575', unit: 't', label: 'MTOW' },
+  { icon: 'users', value: '545', unit: '', label: 'Seats, 4-class' },
+];
 
 export function ExplorePanel() {
   const env = useUI((s) => s.env);
@@ -16,11 +24,24 @@ export function ExplorePanel() {
   const lightsOn = useSim((s) => s.s.lights.nav && s.s.lights.beacon);
   const [msg, setMsg] = useState<string | null>(null);
   const demo = (d: Parameters<typeof runDemo>[0]) => setMsg(runDemo(d));
+  const touch = useTouch();
   return (
     <ScrollArea className="max-h-full">
       <SectionTitle eyebrow="Explore" title="Airbus A380-800">
-        The world's largest passenger airliner: two full-length decks, four Trent 900 engines and a 79.75 m wing. Drag to orbit, scroll to zoom, click any component to inspect it.
+        The world's largest passenger airliner: two full-length decks, four Trent 900 engines and a 79.75 m wing.{' '}
+        {touch ? 'Drag to orbit, pinch to zoom, tap any component to inspect it.' : 'Drag to orbit, scroll to zoom, click any component to inspect it.'}
       </SectionTitle>
+      <div className="grid grid-cols-4 gap-px border-t border-white/[0.06] bg-white/[0.04]">
+        {HERO.map((h) => (
+          <div key={h.label} className="bg-graphite-900/60 px-2 py-2.5 text-center">
+            <div className="font-mono text-[15px] font-[500] tabular-nums tracking-[-0.02em] text-paper">
+              {h.value}
+              {h.unit && <span className="ml-0.5 text-[10px] text-graphite-400">{h.unit}</span>}
+            </div>
+            <div className="mt-0.5 truncate text-[9.5px] uppercase tracking-[0.12em] text-graphite-400">{h.label}</div>
+          </div>
+        ))}
+      </div>
       <Group label="Camera">
         <div className="grid grid-cols-3 gap-1.5">
           {PRESETS.map((p) => (

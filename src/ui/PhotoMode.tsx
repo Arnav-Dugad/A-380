@@ -57,7 +57,7 @@ export function PhotoModeBar() {
           ))}
         </div>
       )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-3">
+      <div className="pointer-events-none absolute inset-x-0 bottom-[max(16px,env(safe-area-inset-bottom))] z-30 flex justify-center px-3">
         <Panel className="flex w-full max-w-[860px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3">
           <div className="w-40">
             <Slider label="Field of view" value={fov} min={12} max={75} step={1} onChange={(v) => set({ fov: v })} format={(v) => `${v.toFixed(0)}°`} />

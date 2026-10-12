@@ -9,7 +9,7 @@ interface Toast {
 }
 
 /** Surfaces system feedback (command results, interlocks) as brief, unobtrusive toasts. */
-export function Toasts() {
+export function Toasts({ max = 3 }: { max?: number }) {
   const log = useSim((s) => s.log);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seen = useRef(0);
@@ -18,18 +18,18 @@ export function Toasts() {
     const fresh = log.length >= seen.current ? log.slice(seen.current) : log.slice(-1);
     seen.current = log.length;
     if (!fresh.length) return;
-    const add = fresh.slice(-3).map((l) => ({ id: ++counter.current, text: l.text, level: l.level }));
-    setToasts((t) => [...t, ...add].slice(-3));
+    const add = fresh.slice(-max).map((l) => ({ id: ++counter.current, text: l.text, level: l.level }));
+    setToasts((t) => [...t, ...add].slice(-max));
     const timer = window.setTimeout(() => setToasts((t) => t.filter((x) => !add.some((a) => a.id === x.id))), 3600);
     return () => window.clearTimeout(timer);
-  }, [log]);
+  }, [log, max]);
   return (
     <div aria-live="polite" className="pointer-events-none flex flex-col items-center gap-1.5">
       {toasts.map((t) => (
         <div
           key={t.id}
           className={cx(
-            'a380-enter rounded-full border px-3.5 py-1.5 text-[12px] backdrop-blur-xl',
+            'a380-enter max-w-full truncate rounded-full border px-3.5 py-1.5 text-[12px] backdrop-blur-xl',
             t.level === 'info' ? 'border-white/[0.08] bg-graphite-900/80 text-paper/90' : 'border-amber-warn/30 bg-[#2a2113]/85 text-amber-warn',
           )}
         >

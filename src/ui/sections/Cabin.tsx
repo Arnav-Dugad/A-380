@@ -4,6 +4,7 @@ import { CLASS_NAMES, cabinActions, useCabin, type Deck } from '../../interior/C
 import { systems, type CabinLight } from '../../sim/systems';
 import { useSim } from '../../state/sim';
 import { Button, Group, Label, ScrollArea, SectionTitle, Segmented, cx } from '../kit';
+import { useTouch } from '../useMedia';
 import type { CabinClass } from '../../aircraft/geometry/cabin';
 
 const CLASS_COLOR: Record<CabinClass, string> = { first: '#d9b98c', business: '#6fd3ef', premium: '#a6b4ff', economy: '#7d8794' };
@@ -42,6 +43,7 @@ function SeatMap({ deck }: { deck: Deck }) {
 }
 
 export function CabinPanel() {
+  const touch = useTouch();
   const deck = useCabin((s) => s.deck);
   const seat = useCabin((s) => s.seat);
   const seated = useCabin((s) => s.seated);
@@ -56,7 +58,7 @@ export function CabinPanel() {
   return (
     <ScrollArea className="max-h-full">
       <SectionTitle eyebrow="Cabin" title="Two passenger decks">
-        Walk with W A S D or the arrow keys (Shift to hurry), drag to look around. Click any seat to inspect it, then sit down or look out of the window.
+        {touch ? 'Walk with the joystick and drag to look around. Tap any seat to inspect it, then sit down or look out of the window.' : 'Walk with W A S D or the arrow keys (Shift to hurry), drag to look around. Click any seat to inspect it, then sit down or look out of the window.'}
       </SectionTitle>
       <Group label="Deck">
         <Segmented<Deck> value={deck} onChange={(d) => cabinActions.goDeck(d)} options={[{ value: 'main', label: 'Main deck' }, { value: 'upper', label: 'Upper deck' }]} />

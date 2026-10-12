@@ -120,8 +120,8 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   - reduced-motion support;
   - keyboard-accessible equivalents of the 3D cockpit controls.
 - ✅ Unit tests (Vitest): systems, flight model, scenarios, geometry.
-- ✅ Browser tests (Playwright) of the real rendered app: 15 of 15 pass, 14 desktop and 1
-  mobile. Details are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+- ✅ Browser tests (Playwright) of the real rendered app: 14 desktop tests and 3 mobile
+  tests (Pixel 7, touch). Details are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 - ✅ Cloudflare configuration for Workers static assets (`wrangler.toml`, `_headers`), on the
   free tier. It works with Workers Builds (the dashboard's Git integration), with Wrangler and
   with the GitHub Actions workflow.
@@ -129,6 +129,32 @@ Legend: ✅ implemented and tested · 🟡 implemented, simplified (see notes) �
   failed because the configuration targeted Pages. The configuration now targets Workers
   static assets. This build environment cannot reach `api.cloudflare.com`, so it cannot
   deploy directly. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Mobile and polish
+
+- ✅ Three layouts:
+  - **desktop:** side panels;
+  - **portrait phone:** draggable bottom sheet with peek, half and full snaps;
+  - **landscape phone:** collapsible side panel.
+- ✅ Panel-aware framing. The camera's principal point is shifted to the centre of the
+  visible area, and presets and focus distances are fitted to it. The view glides when a
+  panel opens or is dragged.
+- ✅ Touch controls:
+  - cabin walking joystick;
+  - flight side-stick, thrust slider and quick actions;
+  - pinch-to-zoom in first person.
+
+  The flight controls feed the same input path as the keyboard and gamepad. The HUD has a
+  compact layout for phones.
+- ✅ Inspector, settings and help appear as sheets on phones; help shows touch gestures on
+  touch devices.
+- ✅ Wider field of view on portrait screens in the cockpit and cabin.
+- ✅ Polish:
+  - hover labels on parts;
+  - headline figures in Explore;
+  - reworked loading screen;
+  - device-appropriate default graphics preset;
+  - web app manifest, home-screen icons and a share preview image.
 
 ## Known limitations
 
