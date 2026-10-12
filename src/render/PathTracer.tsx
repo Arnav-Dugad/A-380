@@ -28,7 +28,7 @@ import { DenoiseMaterial, PhysicalCamera, WebGLPathTracer } from 'three-gpu-path
 import { GenerateMeshBVHWorker } from 'three-mesh-bvh/src/workers/GenerateMeshBVHWorker.js';
 import { getControls } from '../camera/controls';
 import { useUI } from '../state/ui';
-import { canvasRef, TONE_MAPS } from './output';
+import { canvasRef, TONE_MAPS, tracerRef } from './output';
 import { useRender, type RenderBackground } from './renderState';
 
 
@@ -200,17 +200,6 @@ function createTracer(gl: WebGLRenderer, denoiser: FullScreenQuad, useWorker: bo
   return { pt, worker };
 }
 
-/** Saves the current path-traced frame as a PNG (alpha preserved for a transparent background). */
-export function saveRender(): { width: number; height: number } | null {
-  const c = canvasRef.el;
-  if (!c) return null;
-  const a = document.createElement('a');
-  a.href = c.toDataURL('image/png');
-  a.download = `a380-render-${Math.floor(useRender.getState().samples)}spp-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
-  a.click();
-  return { width: c.width, height: c.height };
-}
-
 export default function PathTracerImpl() {
   const gl = useThree((s) => s.gl) as WebGLRenderer;
   const scene = useThree((s) => s.scene);
@@ -233,6 +222,7 @@ export default function PathTracerImpl() {
       tracer.current.worker?.dispose();
     }
     tracer.current = createTracer(gl, denoiser, useWorker);
+    tracerRef.pt = tracer.current.pt;
     return tracer.current.pt;
   };
 
@@ -243,6 +233,7 @@ export default function PathTracerImpl() {
       tracer.current?.pt.dispose();
       tracer.current?.worker?.dispose();
       tracer.current = null;
+      tracerRef.pt = null;
       denoiser.dispose();
       denoiser.material.dispose();
       useRender.getState().set({ status: 'idle', samples: 0, progress: 0 });

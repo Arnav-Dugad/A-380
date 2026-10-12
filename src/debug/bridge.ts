@@ -12,6 +12,7 @@ import { Box3, Raycaster, Vector2, Vector3 } from 'three';
 import { flight } from '../sim/flight';
 import { perf } from '../perf/PerfProbe';
 import { useRender } from '../render/renderState';
+import { tracerRef } from '../render/output';
 import { previewAtlas } from '../aircraft/textures/atlases';
 
 export interface Bridge {
@@ -74,6 +75,8 @@ export function installBridge(): void {
     perf,
     extra: {
       firstPerson,
+      /** the live path tracer while Rendered shading is active */
+      tracer: () => tracerRef.pt,
       cabinActions,
       /** set the orbit camera's lens (degrees) */
       fov: (deg: number) => {

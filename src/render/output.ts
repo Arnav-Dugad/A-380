@@ -6,6 +6,9 @@ export const TONE_MAPS: Record<ToneMap, ToneMapping> = { neutral: NeutralToneMap
 
 export const canvasRef: { el: HTMLCanvasElement | null } = { el: null };
 
+/** The live path tracer, for the automation bridge (diagnostics only). */
+export const tracerRef: { pt: unknown } = { pt: null };
+
 /** Saves the current path-traced frame as a PNG (alpha preserved for a transparent background). */
 export function saveRender(): { width: number; height: number } | null {
   const c = canvasRef.el;
